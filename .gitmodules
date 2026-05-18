@@ -1,0 +1,18 @@
+[submodule "cds/sources/smart-anc"]
+	path = cds/sources/smart-anc
+	url = https://github.com/WorldHealthOrganization/smart-anc.git
+[submodule "cds/sources/smart-dak-immunizations"]
+	path = cds/sources/smart-dak-immunizations
+	url = https://github.com/WorldHealthOrganization/smart-dak-immunizations.git
+[submodule "cds/sources/smart-dak-pnc"]
+	path = cds/sources/smart-dak-pnc
+	url = https://github.com/WorldHealthOrganization/smart-dak-pnc.git
+[submodule "cds/sources/smart-dak-srv"]
+	path = cds/sources/smart-dak-srv
+	url = https://github.com/WorldHealthOrganization/smart-dak-srv.git
+[submodule "cds/sources/smart-dak-tb"]
+	path = cds/sources/smart-dak-tb
+	url = https://github.com/WorldHealthOrganization/smart-dak-tb.git
+[submodule "cds/sources/smart-hiv"]
+	path = cds/sources/smart-hiv
+	url = https://github.com/WorldHealthOrganization/smart-hiv.git

@@ -1,0 +1,119 @@
+{
+  "packId": "laboratory-shared",
+  "name": "Shared Laboratory",
+  "description": "Shared laboratory service point for hospital or clinic routing.",
+  "compatibleArchetypes": ["general-outpatient", "specialty-clinic", "district-hospital", "primary-health-centre"],
+  "config": {
+    "localConcepts": [
+      {
+        "id": "laboratory-services",
+        "fullySpecifiedName": "Laboratory Services",
+        "shortName": "Laboratory Services",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "laboratory-queue-service",
+        "fullySpecifiedName": "Laboratory queue service",
+        "shortName": "Laboratory Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-waiting",
+        "fullySpecifiedName": "Waiting (Laboratory Queue)",
+        "shortName": "Waiting",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-in-progress",
+        "fullySpecifiedName": "In progress (Laboratory Queue)",
+        "shortName": "In Progress",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-completed",
+        "fullySpecifiedName": "Completed (Laboratory Queue)",
+        "shortName": "Completed",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-set",
+        "fullySpecifiedName": "Laboratory Queue Status Set",
+        "shortName": "Laboratory Queue Statuses",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-status-waiting",
+          "LOCAL:queue-status-in-progress",
+          "LOCAL:queue-status-completed"
+        ]
+      },
+      {
+        "id": "queue-priority-routine",
+        "fullySpecifiedName": "Routine (Laboratory Queue)",
+        "shortName": "Routine",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-urgent",
+        "fullySpecifiedName": "Urgent (Laboratory Queue)",
+        "shortName": "Urgent",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-emergency",
+        "fullySpecifiedName": "Emergency (Laboratory Queue)",
+        "shortName": "Emergency",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-set",
+        "fullySpecifiedName": "Laboratory Queue Priority Set",
+        "shortName": "Laboratory Queue Priorities",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-priority-routine",
+          "LOCAL:queue-priority-urgent",
+          "LOCAL:queue-priority-emergency"
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "laboratory",
+        "name": "Laboratory",
+        "kind": "department"
+      }
+    ],
+    "queues": [
+      {
+        "id": "lab-queue",
+        "name": "Laboratory Queue",
+        "locationId": "laboratory",
+        "serviceConcept": "LOCAL:laboratory-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      }
+    ],
+    "billingModel": {
+      "billableServices": [
+        {
+          "id": "lab-order-service",
+          "serviceName": "Laboratory Order",
+          "shortName": "LAB",
+          "concept": "CIEL:1271",
+          "serviceType": "LOCAL:laboratory-services",
+          "serviceStatus": "Enabled"
+        }
+      ]
+    }
+  }
+}

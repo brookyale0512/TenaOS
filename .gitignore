@@ -1,0 +1,42 @@
+# Dependencies and generated frontend output
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+*.secrets
+
+# Runtime and database artifacts
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*.sqlite
+*.sqlite3
+runtime-artifacts/
+cds/runtime/
+backups/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

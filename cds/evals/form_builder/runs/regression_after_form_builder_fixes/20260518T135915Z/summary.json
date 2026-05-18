@@ -1,0 +1,571 @@
+{
+  "runId": "20260518T135915Z",
+  "cdsBaseUrl": "http://127.0.0.1:8095",
+  "promptCount": 10,
+  "completed": 10,
+  "failed": 0,
+  "meanRecall": 0.22,
+  "schemaValidRate": 1.0,
+  "medianElapsedSeconds": 30.16,
+  "medianToolCalls": 19.0,
+  "perPrompt": [
+    {
+      "promptId": "anc-intake",
+      "request": "Build me an ANC intake form for a first antenatal visit",
+      "recall": 0.25,
+      "clustersCovered": 1,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "chief complaint or symptoms",
+          "expectedAnyOf": [
+            "1390",
+            "160531",
+            "5219"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "gravidity / parity",
+          "expectedAnyOf": [
+            "1053",
+            "1054",
+            "5624",
+            "5630"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "last menstrual period",
+          "expectedAnyOf": [
+            "1427",
+            "1465"
+          ],
+          "matched": [
+            "1427"
+          ],
+          "covered": true
+        },
+        {
+          "label": "HIV status or test",
+          "expectedAnyOf": [
+            "1063",
+            "1169"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 5,
+      "sizeOk": false,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 16,
+      "elapsedSeconds": 30.17,
+      "draftId": "c4632aeb-2d05-4113-a4f0-835a261bdd14",
+      "schemaValid": true
+    },
+    {
+      "promptId": "tb-initial",
+      "request": "Create a TB initial assessment form for an adult patient",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "cough",
+          "expectedAnyOf": [
+            "143264",
+            "159666"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "fever",
+          "expectedAnyOf": [
+            "140238",
+            "162628"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "weight loss",
+          "expectedAnyOf": [
+            "1731",
+            "832"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "TB exposure history",
+          "expectedAnyOf": [
+            "1396",
+            "159922",
+            "160239",
+            "165918"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 5,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 10,
+      "elapsedSeconds": 30.17,
+      "draftId": "ed78421c-eff0-477b-a49d-3afa57d0ac01",
+      "schemaValid": true
+    },
+    {
+      "promptId": "hiv-initial",
+      "request": "Build an HIV initial counselling and testing form",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 3,
+      "clusterHits": [
+        {
+          "label": "HIV test result",
+          "expectedAnyOf": [
+            "1063",
+            "1169"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "WHO clinical stage",
+          "expectedAnyOf": [
+            "163058",
+            "5356"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "ARV / treatment history",
+          "expectedAnyOf": [
+            "1149",
+            "1255"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 7,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 18,
+      "cielSearchCount": 12,
+      "elapsedSeconds": 30.16,
+      "draftId": "16e6583b-8451-439f-b315-a590a8a4d400",
+      "schemaValid": true
+    },
+    {
+      "promptId": "ent-intake",
+      "request": "Create a compact ENT intake form covering ear, nose and throat symptoms",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "chief complaint",
+          "expectedAnyOf": [
+            "160531",
+            "5219"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "ear symptoms (pain/discharge/hearing loss)",
+          "expectedAnyOf": [
+            "117",
+            "121",
+            "147241",
+            "5006"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "nasal symptoms (congestion/discharge)",
+          "expectedAnyOf": [
+            "118",
+            "131",
+            "5953"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "throat symptoms (sore throat/hoarseness)",
+          "expectedAnyOf": [
+            "111",
+            "158843",
+            "5959"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 4,
+      "sizeOk": false,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 9,
+      "elapsedSeconds": 30.17,
+      "draftId": "8fa5c542-7bfc-48f7-b674-a8d7d7cd60ec",
+      "schemaValid": true
+    },
+    {
+      "promptId": "peds-wellness",
+      "request": "Build a pediatric wellness visit form for a 6 month old",
+      "recall": 0.75,
+      "clustersCovered": 3,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "weight",
+          "expectedAnyOf": [
+            "5089"
+          ],
+          "matched": [
+            "5089"
+          ],
+          "covered": true
+        },
+        {
+          "label": "height/length",
+          "expectedAnyOf": [
+            "5090"
+          ],
+          "matched": [
+            "5090"
+          ],
+          "covered": true
+        },
+        {
+          "label": "head circumference",
+          "expectedAnyOf": [
+            "5314"
+          ],
+          "matched": [
+            "5314"
+          ],
+          "covered": true
+        },
+        {
+          "label": "immunization given today",
+          "expectedAnyOf": [
+            "886",
+            "984"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 7,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 17,
+      "elapsedSeconds": 30.16,
+      "draftId": "715d2f7b-f33d-4f05-8dfa-3083943f5922",
+      "schemaValid": true
+    },
+    {
+      "promptId": "vitals-only",
+      "request": "Make a quick vitals-only form: BP, weight, height, temperature, pulse",
+      "recall": 1.0,
+      "clustersCovered": 6,
+      "clustersTotal": 6,
+      "clusterHits": [
+        {
+          "label": "weight",
+          "expectedAnyOf": [
+            "5089"
+          ],
+          "matched": [
+            "5089"
+          ],
+          "covered": true
+        },
+        {
+          "label": "height",
+          "expectedAnyOf": [
+            "5090"
+          ],
+          "matched": [
+            "5090"
+          ],
+          "covered": true
+        },
+        {
+          "label": "systolic BP",
+          "expectedAnyOf": [
+            "5085"
+          ],
+          "matched": [
+            "5085"
+          ],
+          "covered": true
+        },
+        {
+          "label": "diastolic BP",
+          "expectedAnyOf": [
+            "5086"
+          ],
+          "matched": [
+            "5086"
+          ],
+          "covered": true
+        },
+        {
+          "label": "temperature",
+          "expectedAnyOf": [
+            "5088"
+          ],
+          "matched": [
+            "5088"
+          ],
+          "covered": true
+        },
+        {
+          "label": "pulse / heart rate",
+          "expectedAnyOf": [
+            "5087"
+          ],
+          "matched": [
+            "5087"
+          ],
+          "covered": true
+        }
+      ],
+      "fieldCount": 6,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 15,
+      "cielSearchCount": 6,
+      "elapsedSeconds": 30.17,
+      "draftId": "3d49dfa8-6e76-479a-94cc-58f03e6f719e",
+      "schemaValid": true
+    },
+    {
+      "promptId": "diabetes-followup",
+      "request": "Diabetes follow-up form: blood sugar, weight, BP, foot exam, medication adherence",
+      "recall": 0.2,
+      "clustersCovered": 1,
+      "clustersTotal": 5,
+      "clusterHits": [
+        {
+          "label": "blood glucose (random or fasting)",
+          "expectedAnyOf": [
+            "160912",
+            "5497",
+            "887"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "weight",
+          "expectedAnyOf": [
+            "5089"
+          ],
+          "matched": [
+            "5089"
+          ],
+          "covered": true
+        },
+        {
+          "label": "systolic BP",
+          "expectedAnyOf": [
+            "5085"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "diastolic BP",
+          "expectedAnyOf": [
+            "5086"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "medication adherence",
+          "expectedAnyOf": [
+            "161653",
+            "1658"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 2,
+      "sizeOk": false,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 12,
+      "elapsedSeconds": 30.16,
+      "draftId": "25cb7f70-7fb9-4f79-a533-f3800d9112c8",
+      "schemaValid": true
+    },
+    {
+      "promptId": "mental-health-screen",
+      "request": "Create a mental health screening form with PHQ-9 style depression questions",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "depressed mood",
+          "expectedAnyOf": [
+            "159264",
+            "1844"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "anhedonia / loss of interest",
+          "expectedAnyOf": [
+            "120607"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "sleep disturbance",
+          "expectedAnyOf": [
+            "118742",
+            "121",
+            "5959"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "suicidal ideation",
+          "expectedAnyOf": [
+            "165092",
+            "6024"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 9,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 16,
+      "cielSearchCount": 10,
+      "elapsedSeconds": 30.19,
+      "draftId": "62741f05-f9e4-4f15-9d24-3368457531b1",
+      "schemaValid": true
+    },
+    {
+      "promptId": "postnatal",
+      "request": "Postnatal care form for a mother 1 week after delivery",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "vaginal bleeding",
+          "expectedAnyOf": [
+            "116732",
+            "147241"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "breastfeeding status",
+          "expectedAnyOf": [
+            "5632"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "fever",
+          "expectedAnyOf": [
+            "140238"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "infant feeding / status",
+          "expectedAnyOf": [
+            "1109"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 8,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 15,
+      "elapsedSeconds": 30.16,
+      "draftId": "26176920-de66-425f-a117-dccb3e75827a",
+      "schemaValid": true
+    },
+    {
+      "promptId": "fr-anc-intake",
+      "request": "Construire un formulaire pour la premi\u00e8re visite pr\u00e9natale (CPN)",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 3,
+      "clusterHits": [
+        {
+          "label": "chief complaint or symptoms",
+          "expectedAnyOf": [
+            "160531",
+            "5219"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "gravidity / parity",
+          "expectedAnyOf": [
+            "1053",
+            "1054",
+            "5624",
+            "5630"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "last menstrual period",
+          "expectedAnyOf": [
+            "1427",
+            "1465"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 2,
+      "sizeOk": false,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 17,
+      "elapsedSeconds": 30.16,
+      "draftId": "b3244473-5bf2-4f95-8f0b-8f91ffdf3bd4",
+      "schemaValid": true
+    }
+  ]
+}

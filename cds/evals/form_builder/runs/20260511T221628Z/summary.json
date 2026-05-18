@@ -1,0 +1,72 @@
+{
+  "runId": "20260511T221628Z",
+  "cdsBaseUrl": "http://127.0.0.1:8095",
+  "promptCount": 1,
+  "completed": 1,
+  "failed": 0,
+  "meanRecall": 0.75,
+  "schemaValidRate": 1.0,
+  "medianElapsedSeconds": 17.12,
+  "medianToolCalls": 12,
+  "perPrompt": [
+    {
+      "promptId": "tb-initial",
+      "request": "Create a TB initial assessment form for an adult patient",
+      "recall": 0.75,
+      "clustersCovered": 3,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "cough",
+          "expectedAnyOf": [
+            "143264",
+            "159666"
+          ],
+          "matched": [
+            "143264"
+          ],
+          "covered": true
+        },
+        {
+          "label": "fever",
+          "expectedAnyOf": [
+            "140238",
+            "162628"
+          ],
+          "matched": [
+            "140238"
+          ],
+          "covered": true
+        },
+        {
+          "label": "weight loss",
+          "expectedAnyOf": [
+            "1731",
+            "832"
+          ],
+          "matched": [
+            "832"
+          ],
+          "covered": true
+        },
+        {
+          "label": "TB exposure history",
+          "expectedAnyOf": [
+            "1396",
+            "159922"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 8,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 12,
+      "cielSearchCount": 9,
+      "elapsedSeconds": 17.12,
+      "draftId": "f5d90927-6b02-4d89-97f4-e2c0da7becfa",
+      "schemaValid": true
+    }
+  ]
+}

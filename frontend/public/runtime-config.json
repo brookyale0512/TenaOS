@@ -1,0 +1,31 @@
+{
+  "$schema": "Optional runtime overrides served by nginx. Each key matches a VITE_* default and wins over the build-time value. Edit per-deployment without rebuilding the image.",
+  "openmrsBaseUrl": null,
+  "patientListQuery": null,
+  "activeVisitMaxAgeHours": null,
+  "capabilities": {
+    "queues": null,
+    "appointments": null
+  },
+  "metadata": {
+    "vitalsEncounterTypeUuid": null,
+    "clinicalNoteEncounterTypeUuid": null,
+    "clinicalNoteConceptUuid": null,
+    "medicationOrderTypeUuid": null,
+    "labOrderTypeUuid": null,
+    "outpatientCareSettingUuid": null,
+    "defaultOrdererProviderUuid": null,
+    "defaultVisitTypeUuid": null,
+    "phoneAttributeTypeUuid": null,
+    "vitalConcepts": {
+      "temperature": null,
+      "systolicBP": null,
+      "diastolicBP": null,
+      "pulse": null,
+      "oxygenSat": null,
+      "respRate": null,
+      "height": null,
+      "weight": null
+    }
+  }
+}

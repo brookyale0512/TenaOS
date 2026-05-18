@@ -1,0 +1,250 @@
+{
+  "packId": "opd-core",
+  "name": "OPD Core",
+  "description": "Registration, triage, consultation, and core outpatient forms.",
+  "compatibleArchetypes": ["general-outpatient", "district-hospital", "primary-health-centre"],
+  "config": {
+    "localConcepts": [
+      {
+        "id": "outpatient-services",
+        "fullySpecifiedName": "Outpatient Services",
+        "shortName": "Outpatient Services",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "registration-queue-service",
+        "fullySpecifiedName": "Registration queue service",
+        "shortName": "Registration Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "triage-queue-service",
+        "fullySpecifiedName": "Triage queue service",
+        "shortName": "Triage Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "consultation-queue-service",
+        "fullySpecifiedName": "Consultation queue service",
+        "shortName": "Consultation Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-waiting",
+        "fullySpecifiedName": "Waiting (OPD Queue)",
+        "shortName": "Waiting",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-in-progress",
+        "fullySpecifiedName": "In progress (OPD Queue)",
+        "shortName": "In Progress",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-completed",
+        "fullySpecifiedName": "Completed (OPD Queue)",
+        "shortName": "Completed",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-set",
+        "fullySpecifiedName": "OPD Queue Status Set",
+        "shortName": "OPD Queue Statuses",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-status-waiting",
+          "LOCAL:queue-status-in-progress",
+          "LOCAL:queue-status-completed"
+        ]
+      },
+      {
+        "id": "queue-priority-routine",
+        "fullySpecifiedName": "Routine (OPD Queue)",
+        "shortName": "Routine",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-urgent",
+        "fullySpecifiedName": "Urgent (OPD Queue)",
+        "shortName": "Urgent",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-emergency",
+        "fullySpecifiedName": "Emergency (OPD Queue)",
+        "shortName": "Emergency",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-set",
+        "fullySpecifiedName": "OPD Queue Priority Set",
+        "shortName": "OPD Queue Priorities",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-priority-routine",
+          "LOCAL:queue-priority-urgent",
+          "LOCAL:queue-priority-emergency"
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "registration",
+        "name": "OPD Registration",
+        "kind": "department",
+        "loginLocation": true
+      },
+      {
+        "id": "triage",
+        "name": "OPD Triage",
+        "kind": "department"
+      },
+      {
+        "id": "consult",
+        "name": "OPD Consultation",
+        "kind": "department"
+      }
+    ],
+    "staffingModel": {
+      "roles": [
+        {
+          "id": "receptionist",
+          "name": "Receptionist",
+          "cadre": "administration",
+          "queueIds": ["registration-queue"]
+        },
+        {
+          "id": "triage-nurse",
+          "name": "Triage Nurse",
+          "cadre": "nursing",
+          "queueIds": ["triage-queue"]
+        },
+        {
+          "id": "clinician",
+          "name": "Clinician",
+          "cadre": "clinical",
+          "queueIds": ["consult-queue"]
+        }
+      ]
+    },
+    "encounterTypes": [
+      {
+        "id": "registration-encounter",
+        "name": "OPD Registration Encounter"
+      },
+      {
+        "id": "triage-encounter",
+        "name": "OPD Triage Encounter"
+      },
+      {
+        "id": "consultation-encounter",
+        "name": "OPD Consultation Encounter"
+      }
+    ],
+    "forms": [
+      {
+        "id": "triage-form",
+        "name": "OPD Triage Form",
+        "description": "Capture vitals before consultation",
+        "encounter": "triage-encounter",
+        "pages": [
+          {
+            "id": "triage-page",
+            "label": "Vitals",
+            "sections": [
+              {
+                "id": "vitals",
+                "label": "Vitals",
+                "questions": [
+                  {
+                    "id": "weight",
+                    "label": "Weight",
+                    "type": "obs",
+                    "questionOptions": {
+                      "rendering": "number",
+                      "concept": "CIEL:5089"
+                    }
+                  },
+                  {
+                    "id": "temperature",
+                    "label": "Temperature",
+                    "type": "obs",
+                    "questionOptions": {
+                      "rendering": "number",
+                      "concept": "CIEL:5088"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "queues": [
+      {
+        "id": "registration-queue",
+        "name": "OPD Registration Queue",
+        "locationId": "registration",
+        "serviceConcept": "LOCAL:registration-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      },
+      {
+        "id": "triage-queue",
+        "name": "OPD Triage Queue",
+        "locationId": "triage",
+        "serviceConcept": "LOCAL:triage-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      },
+      {
+        "id": "consult-queue",
+        "name": "OPD Consultation Queue",
+        "locationId": "consult",
+        "serviceConcept": "LOCAL:consultation-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      }
+    ],
+    "routingRules": [
+      {
+        "id": "registration-to-triage",
+        "fromQueueId": "registration-queue",
+        "toQueueId": "triage-queue",
+        "mode": "recommended"
+      },
+      {
+        "id": "triage-to-consult",
+        "fromQueueId": "triage-queue",
+        "toQueueId": "consult-queue",
+        "mode": "recommended"
+      }
+    ],
+    "billingModel": {
+      "billableServices": [
+        {
+          "id": "consult-service",
+          "serviceName": "OPD Consultation",
+          "shortName": "OPDC",
+          "concept": "CIEL:160538",
+          "serviceType": "LOCAL:outpatient-services",
+          "serviceStatus": "Enabled"
+        }
+      ]
+    }
+  }
+}

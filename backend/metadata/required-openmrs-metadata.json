@@ -1,0 +1,57 @@
+{
+  "phase": "tenaos_phase_1",
+  "openmrsOnly": true,
+  "requiredRestResources": [
+    {
+      "resource": "session",
+      "endpoint": "/openmrs/ws/rest/v1/session",
+      "minimum": 1,
+      "purpose": "native OpenMRS session and REST availability"
+    },
+    {
+      "resource": "location",
+      "endpoint": "/openmrs/ws/rest/v1/location",
+      "minimum": 1,
+      "purpose": "registration, visit start, encounter submission"
+    },
+    {
+      "resource": "patientidentifiertype",
+      "endpoint": "/openmrs/ws/rest/v1/patientidentifiertype",
+      "minimum": 1,
+      "purpose": "patient registration identifiers"
+    },
+    {
+      "resource": "visittype",
+      "endpoint": "/openmrs/ws/rest/v1/visittype",
+      "minimum": 1,
+      "purpose": "start visit workflow"
+    },
+    {
+      "resource": "form",
+      "endpoint": "/openmrs/ws/rest/v1/form",
+      "minimum": 1,
+      "purpose": "form catalog and encounter capture"
+    }
+  ],
+  "clinicalUuidContract": {
+    "vitalsEncounterType": "67a71486-1a54-468f-ac3e-7091a9a79584",
+    "noteEncounterType": "d7151f82-c1f3-4152-a605-2f9ea7414a79",
+    "vitalsConcepts": {
+      "temperature": "5088AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "systolicBP": "5085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "diastolicBP": "5086AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "pulse": "5087AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "oxygenSat": "5092AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "respRate": "5242AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "height": "5090AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "weight": "5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "noteTextConcept": "162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "queueContract": {
+    "requiresQueueModule": true,
+    "requiresAllowedStatuses": true,
+    "requiresAllowedPriorities": true,
+    "frontendUsesFirstAllowedStatusAndPriorityForAddPatient": true
+  }
+}

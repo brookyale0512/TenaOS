@@ -1,0 +1,121 @@
+{
+  "traceId": "tb-b4-missing-risk-group",
+  "scenario": "Adult patient at TB screening algorithm step with missing TB risk group",
+  "modelBoundary": "Gemma 4 may identify missing data, but may not infer risk group or produce a screening recommendation.",
+  "toolCalls": [
+    {
+      "step": 1,
+      "tool": "search_dak_rules",
+      "arguments": {
+        "dak": "smart-dak-tb",
+        "workflowContext": {
+          "activityId": "TB.B4",
+          "clinicalArea": "screening",
+          "userIntent": "determine screening algorithm"
+        },
+        "patientSummary": {
+          "ageYears": 42,
+          "knownFacts": []
+        }
+      },
+      "result": {
+        "candidates": [
+          {
+            "decisionId": "TB.B4.DT",
+            "title": "Screening algorithm",
+            "trigger": "TB.B4. Determine the screening algorithm",
+            "hitPolicy": "Rule order"
+          }
+        ]
+      }
+    },
+    {
+      "step": 2,
+      "tool": "get_required_data",
+      "arguments": {
+        "dak": "smart-dak-tb",
+        "decisionId": "TB.B4.DT"
+      },
+      "result": {
+        "requiredFacts": [
+          "age",
+          "riskGroup"
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "fetch_patient_fhir",
+      "arguments": {
+        "patientId": "SYN-TB-B4-002",
+        "requiredFactIds": [
+          "age",
+          "riskGroup"
+        ],
+        "fhirServerProfile": "synthetic-openmrs-fhir-r4"
+      },
+      "result": {
+        "bundlePath": "../sample-patient-bundles/tb-b4-missing-risk-group.bundle.json",
+        "fetchedResources": [
+          "Patient"
+        ],
+        "omittedResources": [
+          "Observation: no mapped TB risk-group observation present"
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "normalize_to_dak_inputs",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "fhirBundleRef": "tb-b4-missing-risk-group.bundle.json"
+      },
+      "result": {
+        "normalizedInputs": {
+          "age": {
+            "value": 42,
+            "unit": "years",
+            "source": "Patient.birthDate"
+          }
+        },
+        "unmappedFacts": []
+      }
+    },
+    {
+      "step": 5,
+      "tool": "detect_missing_data",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "normalizedInputsRef": "trace.step4.normalizedInputs"
+      },
+      "result": {
+        "canEvaluate": false,
+        "missingFacts": [
+          {
+            "id": "riskGroup",
+            "label": "Risk group",
+            "reason": "Required input column for TB.B4.DT"
+          }
+        ]
+      }
+    },
+    {
+      "step": 6,
+      "tool": "create_cds_card",
+      "arguments": {
+        "insufficientDataRef": "trace.step5.result",
+        "style": "clinician_concise"
+      },
+      "result": {
+        "cardPath": "../generated-cds-cards/tb-b4-missing-risk-group.card.json",
+        "groundingCheck": {
+          "passed": true,
+          "unsupportedStatements": []
+        }
+      }
+    }
+  ],
+  "forbiddenSkippedTool": "apply_dak_rule",
+  "finalStatus": "insufficient_data_card_created"
+}

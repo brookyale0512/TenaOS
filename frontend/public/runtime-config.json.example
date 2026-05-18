@@ -1,0 +1,36 @@
+{
+  "_comment": "Copy this file to runtime-config.json and serve it at /runtime-config.json (nginx serves the public/ directory). Values here override build-time env vars at startup — useful for multi-environment Docker images where you cannot rebuild the frontend per deployment. Omit or set null to fall back to build-time defaults.",
+
+  "openmrsBaseUrl": "/openmrs",
+
+  "patientListQuery": "",
+
+  "activeVisitMaxAgeHours": 24,
+
+  "capabilities": {
+    "queues": true,
+    "appointments": false
+  },
+
+  "metadata": {
+    "vitalsEncounterTypeUuid": "67a71486-1a54-468f-ac3e-7091a9a79584",
+    "clinicalNoteEncounterTypeUuid": "d7151f82-c1f3-4152-a605-2f9ea7414a79",
+    "clinicalNoteConceptUuid": "162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "medicationOrderTypeUuid": "131168f4-15f5-102d-96e4-000c29c2a5d7",
+    "labOrderTypeUuid": "52a447d3-a64a-11e3-9aeb-50e549534c5e",
+    "outpatientCareSettingUuid": "6f0c9a92-6f24-11e3-af88-005056821db0",
+    "defaultOrdererProviderUuid": null,
+    "defaultVisitTypeUuid": null,
+    "phoneAttributeTypeUuid": null,
+    "vitalConcepts": {
+      "temperature": "5088AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "systolicBP": "5085AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "diastolicBP": "5086AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "pulse": "5087AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "oxygenSat": "5092AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "respRate": "5242AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "height": "5090AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "weight": "5089AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  }
+}

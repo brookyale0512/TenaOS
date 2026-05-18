@@ -1,0 +1,632 @@
+{
+  "schemaVersion": "1.0",
+  "archetype": "general-outpatient",
+  "facilityProfile": {
+    "code": "sunrise-opd",
+    "name": "Sunrise Community Clinic",
+    "facilityType": "general-outpatient",
+    "ownership": "faith-based",
+    "country": "Kenya",
+    "timezone": "Africa/Nairobi",
+    "languages": ["en", "sw"],
+    "defaultCurrency": "KES"
+  },
+  "locations": [
+    {
+      "id": "facility-main",
+      "name": "Sunrise Community Clinic",
+      "kind": "facility",
+      "facilityLocation": true,
+      "address": {
+        "cityVillage": "Kisumu",
+        "countyDistrict": "Kisumu County",
+        "country": "Kenya"
+      }
+    },
+    {
+      "id": "registration-desk",
+      "name": "Registration Desk",
+      "kind": "department",
+      "parentId": "facility-main",
+      "loginLocation": true,
+      "tags": ["Front Desk"]
+    },
+    {
+      "id": "triage-room",
+      "name": "Triage Room",
+      "kind": "room",
+      "parentId": "facility-main",
+      "tags": ["Consultation Location"]
+    },
+    {
+      "id": "consult-room",
+      "name": "Consultation Room",
+      "kind": "room",
+      "parentId": "facility-main",
+      "tags": ["Consultation Location"]
+    },
+    {
+      "id": "cashier-desk",
+      "name": "Cashier Desk",
+      "kind": "department",
+      "parentId": "facility-main",
+      "tags": ["Cashier"]
+    },
+    {
+      "id": "pharmacy-dispensing",
+      "name": "Pharmacy Dispensing",
+      "kind": "department",
+      "parentId": "facility-main",
+      "tags": ["Pharmacy"]
+    },
+    {
+      "id": "lab-handoff",
+      "name": "Lab Handoff",
+      "kind": "department",
+      "parentId": "facility-main",
+      "tags": ["Laboratory"]
+    }
+  ],
+  "staffingModel": {
+    "roles": [
+      {
+        "id": "receptionist-role",
+        "name": "Receptionist",
+        "cadre": "administration",
+        "queueIds": ["registration-queue"],
+        "responsibilities": ["patient registration", "queue initiation"]
+      },
+      {
+        "id": "triage-nurse-role",
+        "name": "Triage Nurse",
+        "cadre": "nursing",
+        "queueIds": ["triage-queue"],
+        "responsibilities": ["vitals", "triage assessment"]
+      },
+      {
+        "id": "clinician-role",
+        "name": "Clinician",
+        "cadre": "clinical",
+        "queueIds": ["consult-queue"],
+        "responsibilities": ["consultation", "ordering"]
+      },
+      {
+        "id": "cashier-role",
+        "name": "Cashier",
+        "cadre": "finance",
+        "queueIds": ["cashier-queue"],
+        "responsibilities": ["billing", "payment collection"]
+      },
+      {
+        "id": "dispenser-role",
+        "name": "Dispenser",
+        "cadre": "pharmacy",
+        "queueIds": ["pharmacy-queue"],
+        "responsibilities": ["dispensing", "stock review"]
+      }
+    ]
+  },
+  "registrationModel": {
+    "loginLocationId": "registration-desk",
+    "walkInAllowed": true,
+    "appointmentMode": "hybrid",
+    "referralSources": ["walk-in", "community-referral", "facility-referral"],
+    "identifierStrategy": {
+      "identifierType": "OpenMRS ID",
+      "baseCharacterSet": "0123456789",
+      "firstIdentifierBase": "10001",
+      "prefix": "SC-",
+      "minLength": 7,
+      "maxLength": 11
+    }
+  },
+  "localConcepts": [
+    {
+      "id": "outpatient-services",
+      "fullySpecifiedName": "Outpatient Services",
+      "shortName": "Outpatient Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "laboratory-services",
+      "fullySpecifiedName": "Laboratory Services",
+      "shortName": "Laboratory Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "registration-queue-service",
+      "fullySpecifiedName": "Registration queue service",
+      "shortName": "Registration Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "triage-queue-service",
+      "fullySpecifiedName": "Triage queue service",
+      "shortName": "Triage Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "consultation-queue-service",
+      "fullySpecifiedName": "Consultation queue service",
+      "shortName": "Consultation Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "cashier-queue-service",
+      "fullySpecifiedName": "Cashier queue service",
+      "shortName": "Cashier Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "pharmacy-queue-service",
+      "fullySpecifiedName": "Pharmacy queue service",
+      "shortName": "Pharmacy Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-waiting",
+      "fullySpecifiedName": "Waiting",
+      "shortName": "Waiting",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-in-progress",
+      "fullySpecifiedName": "In progress",
+      "shortName": "In Progress",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-completed",
+      "fullySpecifiedName": "Completed",
+      "shortName": "Completed",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-set",
+      "fullySpecifiedName": "Queue Status Set",
+      "shortName": "Queue Statuses",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-status-waiting",
+        "LOCAL:queue-status-in-progress",
+        "LOCAL:queue-status-completed"
+      ]
+    },
+    {
+      "id": "queue-priority-routine",
+      "fullySpecifiedName": "Routine",
+      "shortName": "Routine",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-urgent",
+      "fullySpecifiedName": "Urgent",
+      "shortName": "Urgent",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-emergency",
+      "fullySpecifiedName": "Emergency",
+      "shortName": "Emergency",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-set",
+      "fullySpecifiedName": "Queue Priority Set",
+      "shortName": "Queue Priorities",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-priority-routine",
+        "LOCAL:queue-priority-urgent",
+        "LOCAL:queue-priority-emergency"
+      ]
+    }
+  ],
+  "encounterTypes": [
+    {
+      "id": "registration-encounter",
+      "name": "Registration Encounter",
+      "description": "Initial registration encounter"
+    },
+    {
+      "id": "triage-encounter",
+      "name": "Triage Encounter",
+      "description": "Vitals and intake assessment"
+    },
+    {
+      "id": "consultation-encounter",
+      "name": "Consultation Encounter",
+      "description": "Primary care consultation"
+    },
+    {
+      "id": "dispensing-encounter",
+      "name": "Dispensing Encounter",
+      "description": "Medication dispensing encounter"
+    }
+  ],
+  "forms": [
+    {
+      "id": "patient-registration-form",
+      "name": "Patient Registration Form",
+      "description": "Register new and returning patients",
+      "encounter": "registration-encounter",
+      "pages": [
+        {
+          "id": "demographics-page",
+          "label": "Demographics",
+          "sections": [
+            {
+              "id": "demographics-section",
+              "label": "Basic Information",
+              "questions": [
+                {
+                  "id": "phone-number",
+                  "label": "Phone Number",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "text",
+                    "concept": "CIEL:159635"
+                  }
+                },
+                {
+                  "id": "sex",
+                  "label": "Sex",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "select",
+                    "concept": "CIEL:1534",
+                    "answers": [
+                      {"concept": "CIEL:1534", "label": "Male"},
+                      {"concept": "CIEL:1535", "label": "Female"}
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "triage-form",
+      "name": "Triage Form",
+      "description": "Capture vitals before consultation",
+      "encounter": "triage-encounter",
+      "pages": [
+        {
+          "id": "vitals-page",
+          "label": "Vitals",
+          "sections": [
+            {
+              "id": "vitals-section",
+              "label": "Vitals",
+              "questions": [
+                {
+                  "id": "weight",
+                  "label": "Weight",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5089"
+                  }
+                },
+                {
+                  "id": "height",
+                  "label": "Height",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5090"
+                  }
+                },
+                {
+                  "id": "temperature",
+                  "label": "Temperature",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5088"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "consultation-form",
+      "name": "General Consultation Form",
+      "description": "Primary care consultation form",
+      "encounter": "consultation-encounter",
+      "pages": [
+        {
+          "id": "consult-page",
+          "label": "Consultation",
+          "sections": [
+            {
+              "id": "complaints-section",
+              "label": "Chief Complaint",
+              "questions": [
+                {
+                  "id": "chief-complaint",
+                  "label": "Chief Complaint",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "text",
+                    "concept": "CIEL:160531"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "queues": [
+    {
+      "id": "registration-queue",
+      "name": "Registration Queue",
+      "locationId": "registration-desk",
+      "serviceConcept": "LOCAL:registration-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "triage-queue",
+      "name": "Triage Queue",
+      "locationId": "triage-room",
+      "serviceConcept": "LOCAL:triage-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "consult-queue",
+      "name": "Consultation Queue",
+      "locationId": "consult-room",
+      "serviceConcept": "LOCAL:consultation-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "cashier-queue",
+      "name": "Cashier Queue",
+      "locationId": "cashier-desk",
+      "serviceConcept": "LOCAL:cashier-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "pharmacy-queue",
+      "name": "Pharmacy Queue",
+      "locationId": "pharmacy-dispensing",
+      "serviceConcept": "LOCAL:pharmacy-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    }
+  ],
+  "queueRooms": [
+    {
+      "id": "triage-station",
+      "queueId": "triage-queue",
+      "name": "Triage Station"
+    },
+    {
+      "id": "consult-station",
+      "queueId": "consult-queue",
+      "name": "Consultation Station"
+    }
+  ],
+  "routingRules": [
+    {
+      "id": "registration-to-triage",
+      "fromQueueId": "registration-queue",
+      "toQueueId": "triage-queue",
+      "mode": "recommended"
+    },
+    {
+      "id": "triage-to-consult",
+      "fromQueueId": "triage-queue",
+      "toQueueId": "consult-queue",
+      "mode": "recommended"
+    },
+    {
+      "id": "consult-to-cashier",
+      "fromQueueId": "consult-queue",
+      "toQueueId": "cashier-queue",
+      "mode": "conditional",
+      "requiresPayment": true
+    },
+    {
+      "id": "cashier-to-pharmacy",
+      "fromQueueId": "cashier-queue",
+      "toQueueId": "pharmacy-queue",
+      "mode": "recommended"
+    }
+  ],
+  "billingModel": {
+    "serviceTypeConceptSet": "CIEL:162053",
+    "waiverPaymentModeId": "insurance-mode",
+    "billableServices": [
+      {
+        "id": "consult-service",
+        "serviceName": "General Consultation",
+        "shortName": "CONSULT",
+        "concept": "CIEL:160538",
+        "serviceType": "LOCAL:outpatient-services",
+        "serviceStatus": "Enabled"
+      },
+      {
+        "id": "lab-basic-service",
+        "serviceName": "Basic Lab Request",
+        "shortName": "LAB",
+        "concept": "CIEL:1271",
+        "serviceType": "LOCAL:laboratory-services",
+        "serviceStatus": "Enabled"
+      }
+    ],
+    "paymentModes": [
+      {
+        "id": "cash-mode",
+        "name": "Cash"
+      },
+      {
+        "id": "mobile-money-mode",
+        "name": "Mobile Money",
+        "attributes": [
+          {
+            "name": "Transaction ID",
+            "format": "Text",
+            "required": true
+          }
+        ]
+      },
+      {
+        "id": "insurance-mode",
+        "name": "Insurance",
+        "attributes": [
+          {
+            "name": "Payer",
+            "format": "Text",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "cashPoints": [
+      {
+        "id": "front-cash-point",
+        "name": "Front Cash Point",
+        "description": "Main cashier desk",
+        "locationId": "cashier-desk"
+      }
+    ],
+    "pricingRules": [
+      {
+        "id": "consult-cash-price",
+        "billableServiceId": "consult-service",
+        "amount": 500,
+        "patientCategory": "standard",
+        "requiresPaymentBeforeService": true
+      }
+    ],
+    "globalProperties": {
+      "billing.cashier.autoGenerateReceipt": "true",
+      "billing.receipt.prefix": "SUN"
+    }
+  },
+  "stockPharmacyModel": {
+    "stockLocations": [
+      {
+        "id": "pharmacy-store",
+        "locationId": "pharmacy-dispensing",
+        "tags": ["dispensing"]
+      }
+    ],
+    "operationTypes": [
+      {
+        "id": "dispense-operation",
+        "name": "Dispense",
+        "allowedLocationIds": ["pharmacy-dispensing"]
+      }
+    ],
+    "rules": [
+      {
+        "id": "paracetamol-minimum",
+        "stockItemName": "Paracetamol 500mg",
+        "locationId": "pharmacy-dispensing",
+        "reorderLevel": 100
+      }
+    ],
+    "dispensingQueueIds": ["pharmacy-queue"]
+  },
+  "labModel": {
+    "enabled": true,
+    "departmentLocationId": "lab-handoff",
+    "integratedOrdering": true,
+    "specimenHandoffMode": "manual",
+    "resultDeliveryMode": "fhir",
+    "resultReviewerRoleIds": ["clinician"]
+  },
+  "imagingModel": {
+    "enabled": false,
+    "departmentLocationId": ""
+  },
+  "identityModel": {
+    "roles": [
+      {
+        "id": "admin",
+        "name": "Admin",
+        "description": "Clinic administrator",
+        "keycloakRoles": ["admin"],
+        "openmrsRoles": ["Organizational: System Administrator"],
+        "openelisRoles": ["admin"],
+        "orthancPermissions": ["all"]
+      },
+      {
+        "id": "receptionist",
+        "name": "Receptionist",
+        "description": "Handles registration",
+        "openmrsRoles": ["Registration App: Register Patients"]
+      },
+      {
+        "id": "clinician",
+        "name": "Doctor",
+        "description": "Primary care clinician",
+        "keycloakRoles": ["doctor"],
+        "openmrsRoles": ["Organizational: Doctor", "Provider"]
+      },
+      {
+        "id": "cashier",
+        "name": "Cashier",
+        "description": "Cashier user",
+        "openmrsRoles": ["Cashier"]
+      },
+      {
+        "id": "lab-tech",
+        "name": "Lab Technician",
+        "description": "Laboratory user",
+        "keycloakRoles": ["lab-technician"],
+        "openelisRoles": ["lab-technician"]
+      }
+    ],
+    "users": [
+      {
+        "username": "admin.sunrise",
+        "firstName": "Sunrise",
+        "lastName": "Admin",
+        "email": "admin@sunrise.example",
+        "roleIds": ["admin"]
+      },
+      {
+        "username": "clinical.officer",
+        "firstName": "Mary",
+        "lastName": "Otieno",
+        "email": "mary.otieno@sunrise.example",
+        "roleIds": ["clinician"]
+      }
+    ]
+  },
+  "governance": {
+    "approvalRequired": true,
+    "allowedRequestorRoleIds": ["admin"],
+    "dryRunByDefault": true,
+    "changeTicketPrefix": "SUN"
+  }
+}

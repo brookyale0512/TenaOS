@@ -1,0 +1,161 @@
+{
+  "traceId": "tb-b4-adult-contact",
+  "scenario": "Adult non-PLHIV household contact at TB screening algorithm step",
+  "modelBoundary": "Gemma 4 chooses tools and presents final text; deterministic middleware selects the DAK row.",
+  "toolCalls": [
+    {
+      "step": 1,
+      "tool": "search_dak_rules",
+      "arguments": {
+        "dak": "smart-dak-tb",
+        "workflowContext": {
+          "activityId": "TB.B4",
+          "clinicalArea": "screening",
+          "userIntent": "determine screening algorithm"
+        },
+        "patientSummary": {
+          "ageYears": 35,
+          "knownFacts": [
+            "risk group"
+          ]
+        }
+      },
+      "result": {
+        "candidates": [
+          {
+            "decisionId": "TB.B4.DT",
+            "title": "Screening algorithm",
+            "trigger": "TB.B4. Determine the screening algorithm",
+            "hitPolicy": "Rule order"
+          }
+        ]
+      }
+    },
+    {
+      "step": 2,
+      "tool": "get_required_data",
+      "arguments": {
+        "dak": "smart-dak-tb",
+        "decisionId": "TB.B4.DT"
+      },
+      "result": {
+        "requiredFacts": [
+          "age",
+          "riskGroup"
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "fetch_patient_fhir",
+      "arguments": {
+        "patientId": "SYN-TB-B4-001",
+        "requiredFactIds": [
+          "age",
+          "riskGroup"
+        ],
+        "fhirServerProfile": "synthetic-openmrs-fhir-r4"
+      },
+      "result": {
+        "bundlePath": "../sample-patient-bundles/tb-b4-adult-contact.bundle.json",
+        "fetchedResources": [
+          "Patient",
+          "Observation"
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "normalize_to_dak_inputs",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "fhirBundleRef": "tb-b4-adult-contact.bundle.json"
+      },
+      "result": {
+        "normalizedInputs": {
+          "age": {
+            "value": 35,
+            "unit": "years",
+            "source": "Patient.birthDate"
+          },
+          "riskGroup": {
+            "value": "not_PLHIV",
+            "display": "Household contact of a person with TB",
+            "source": "Observation/obs-risk-group"
+          }
+        },
+        "unmappedFacts": []
+      }
+    },
+    {
+      "step": 5,
+      "tool": "detect_missing_data",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "normalizedInputsRef": "trace.step4.normalizedInputs"
+      },
+      "result": {
+        "canEvaluate": true,
+        "missingFacts": []
+      }
+    },
+    {
+      "step": 6,
+      "tool": "apply_dak_rule",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "normalizedInputsRef": "trace.step4.normalizedInputs"
+      },
+      "result": {
+        "decisionId": "TB.B4.DT",
+        "sourceSheet": "TB.B4.DT Screening algorithm",
+        "hitPolicy": "Rule order",
+        "matchedRows": [
+          {
+            "rowId": "TB.B4.DT.03",
+            "inputMatch": {
+              "riskGroup": "\"Risk group\" not in \"PLHIV\"",
+              "age": "\"Age\" \u226515 'year'"
+            },
+            "outputType": "PlanDefinition",
+            "action": "\"Propose the following screening algorithms: - Parallel screening with any TB symptom and CXR - Sequential positive serial screening with any TB symptom and CXR - Sequential negative serial screening with any TB symptom and CXR - Parallel screening with cough and CXR - Sequential positive serial screening with cough and CXR - Sequential negative serial screening with cough and CXR - Screening with CXR - Screening with mWRD - Screening with any TB symptom - Screening with cough\" AND \"Select screening algorithm\" AND \"Perform screening\"",
+            "guidance": "Select the screening algorithm and screen for TB with one of WHO-recommended screening algorithms for the general population and high-risk groups (not including people living with HIV) aged 15 years and older",
+            "reference": "Operational handbook - Module 2: screening (1), Chapter 3 and Annexes 1-2"
+          }
+        ],
+        "clinicalResultStatus": "rule_matched"
+      }
+    },
+    {
+      "step": 7,
+      "tool": "get_rule_rationale",
+      "arguments": {
+        "decisionId": "TB.B4.DT",
+        "matchedRows": [
+          "TB.B4.DT.03"
+        ]
+      },
+      "result": {
+        "businessRule": "Based on the client's age and the risk group to which the client belongs; the recommended screening algorithms are proposed by the system",
+        "trigger": "TB.B4. Determine the screening algorithm",
+        "sourceCitation": "WHO SMART DAK TB decision-support logic workbook, sheet TB.B4.DT Screening algorithm"
+      }
+    },
+    {
+      "step": 8,
+      "tool": "create_cds_card",
+      "arguments": {
+        "ruleResultRef": "trace.step6.result",
+        "style": "clinician_concise"
+      },
+      "result": {
+        "cardPath": "../generated-cds-cards/tb-b4-adult-contact.card.json",
+        "groundingCheck": {
+          "passed": true,
+          "unsupportedStatements": []
+        }
+      }
+    }
+  ],
+  "finalStatus": "cds_card_created"
+}

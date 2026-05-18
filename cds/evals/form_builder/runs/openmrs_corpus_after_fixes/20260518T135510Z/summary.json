@@ -1,0 +1,203 @@
+{
+  "runId": "20260518T135510Z",
+  "cdsBaseUrl": "http://127.0.0.1:8095",
+  "promptCount": 3,
+  "completed": 3,
+  "failed": 0,
+  "meanRecall": 0.889,
+  "schemaValidRate": 1.0,
+  "medianElapsedSeconds": 30.16,
+  "medianToolCalls": 14,
+  "perPrompt": [
+    {
+      "promptId": "corpus-ampath-demo-triage",
+      "request": "Create a triage vital signs form for an outpatient clinic with systolic and diastolic blood pressure, pulse rate, temperature in Celsius, weight in kilograms, height in centimeters, and oxygen saturation.",
+      "recall": 1.0,
+      "clustersCovered": 7,
+      "clustersTotal": 7,
+      "clusterHits": [
+        {
+          "label": "systolic blood pressure",
+          "expectedAnyOf": [
+            "5085"
+          ],
+          "matched": [
+            "5085"
+          ],
+          "covered": true
+        },
+        {
+          "label": "diastolic blood pressure",
+          "expectedAnyOf": [
+            "5086"
+          ],
+          "matched": [
+            "5086"
+          ],
+          "covered": true
+        },
+        {
+          "label": "pulse or heart rate",
+          "expectedAnyOf": [
+            "5087"
+          ],
+          "matched": [
+            "5087"
+          ],
+          "covered": true
+        },
+        {
+          "label": "temperature",
+          "expectedAnyOf": [
+            "5088"
+          ],
+          "matched": [
+            "5088"
+          ],
+          "covered": true
+        },
+        {
+          "label": "weight",
+          "expectedAnyOf": [
+            "5089"
+          ],
+          "matched": [
+            "5089"
+          ],
+          "covered": true
+        },
+        {
+          "label": "height",
+          "expectedAnyOf": [
+            "5090"
+          ],
+          "matched": [
+            "5090"
+          ],
+          "covered": true
+        },
+        {
+          "label": "oxygen saturation",
+          "expectedAnyOf": [
+            "5092"
+          ],
+          "matched": [
+            "5092"
+          ],
+          "covered": true
+        }
+      ],
+      "fieldCount": 7,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 19,
+      "cielSearchCount": 9,
+      "elapsedSeconds": 30.17,
+      "draftId": "a44649de-477e-480c-95ac-7f9803b839a2",
+      "schemaValid": true
+    },
+    {
+      "promptId": "corpus-openmrs-tb-enrollment",
+      "request": "Create a TB care enrollment form for a clinic to record the TB program type, the date the patient was enrolled in tuberculosis care, and the DS TB treatment number.",
+      "recall": 0.667,
+      "clustersCovered": 2,
+      "clustersTotal": 3,
+      "clusterHits": [
+        {
+          "label": "TB program type",
+          "expectedAnyOf": [
+            "163775",
+            "164411"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "date enrolled in TB care",
+          "expectedAnyOf": [
+            "161552"
+          ],
+          "matched": [
+            "161552"
+          ],
+          "covered": true
+        },
+        {
+          "label": "DS TB treatment number",
+          "expectedAnyOf": [
+            "161654"
+          ],
+          "matched": [
+            "161654"
+          ],
+          "covered": true
+        }
+      ],
+      "fieldCount": 3,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 14,
+      "cielSearchCount": 8,
+      "elapsedSeconds": 30.16,
+      "draftId": "21459cf7-7545-4231-993c-ccf1554fd63b",
+      "schemaValid": true
+    },
+    {
+      "promptId": "corpus-openmrs-hiv-service-enrollment",
+      "request": "Create an HIV care service enrollment form to record the date enrolled in HIV care, the patient's unique service identifier, population category, and general patient notes.",
+      "recall": 1.0,
+      "clustersCovered": 4,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "enrollment date",
+          "expectedAnyOf": [
+            "160555"
+          ],
+          "matched": [
+            "160555"
+          ],
+          "covered": true
+        },
+        {
+          "label": "unique ID",
+          "expectedAnyOf": [
+            "162576"
+          ],
+          "matched": [
+            "162576"
+          ],
+          "covered": true
+        },
+        {
+          "label": "population category",
+          "expectedAnyOf": [
+            "166432"
+          ],
+          "matched": [
+            "166432"
+          ],
+          "covered": true
+        },
+        {
+          "label": "general notes",
+          "expectedAnyOf": [
+            "165095"
+          ],
+          "matched": [
+            "165095"
+          ],
+          "covered": true
+        }
+      ],
+      "fieldCount": 4,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 13,
+      "cielSearchCount": 9,
+      "elapsedSeconds": 30.16,
+      "draftId": "4e821bd1-778d-44b8-b263-7ca0b626f901",
+      "schemaValid": true
+    }
+  ]
+}

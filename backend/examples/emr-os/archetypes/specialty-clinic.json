@@ -1,0 +1,469 @@
+{
+  "schemaVersion": "1.0",
+  "archetype": "specialty-clinic",
+  "facilityProfile": {
+    "code": "hope-anc",
+    "name": "Hope Maternal Health Centre",
+    "facilityType": "specialty-clinic",
+    "ownership": "private-not-for-profit",
+    "country": "Uganda",
+    "timezone": "Africa/Kampala",
+    "languages": ["en", "lg"],
+    "defaultCurrency": "UGX"
+  },
+  "locations": [
+    {
+      "id": "main-facility",
+      "name": "Hope Maternal Health Centre",
+      "kind": "facility",
+      "facilityLocation": true,
+      "address": {
+        "cityVillage": "Mbarara",
+        "country": "Uganda"
+      }
+    },
+    {
+      "id": "front-desk",
+      "name": "Front Desk",
+      "kind": "department",
+      "parentId": "main-facility",
+      "loginLocation": true
+    },
+    {
+      "id": "anc-room",
+      "name": "ANC Consultation Room",
+      "kind": "room",
+      "parentId": "main-facility",
+      "tags": ["Consultation Location"]
+    },
+    {
+      "id": "cashier-room",
+      "name": "ANC Cashier",
+      "kind": "department",
+      "parentId": "main-facility"
+    },
+    {
+      "id": "lab-room",
+      "name": "ANC Laboratory Corner",
+      "kind": "department",
+      "parentId": "main-facility"
+    },
+    {
+      "id": "pharmacy-room",
+      "name": "ANC Pharmacy",
+      "kind": "department",
+      "parentId": "main-facility"
+    }
+  ],
+  "registrationModel": {
+    "loginLocationId": "front-desk",
+    "walkInAllowed": true,
+    "appointmentMode": "hybrid",
+    "identifierStrategy": {
+      "identifierType": "OpenMRS ID",
+      "baseCharacterSet": "0123456789",
+      "firstIdentifierBase": "20001",
+      "prefix": "ANC-",
+      "minLength": 7,
+      "maxLength": 12
+    }
+  },
+  "localConcepts": [
+    {
+      "id": "gestational-age",
+      "fullySpecifiedName": "Gestational Age",
+      "shortName": "Gestational Age",
+      "dataClass": "Question",
+      "dataType": "Numeric"
+    },
+    {
+      "id": "antenatal-services",
+      "fullySpecifiedName": "Antenatal Services",
+      "shortName": "Antenatal Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "imaging-services",
+      "fullySpecifiedName": "Imaging Services",
+      "shortName": "Imaging Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "antenatal-program",
+      "fullySpecifiedName": "Antenatal Program",
+      "shortName": "Antenatal Program",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "antenatal-program-outcomes",
+      "fullySpecifiedName": "Antenatal Program Outcomes",
+      "shortName": "Antenatal Program Outcomes",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": ["LOCAL:active-follow-up", "LOCAL:delivered-state"]
+    },
+    {
+      "id": "anc-follow-up-status",
+      "fullySpecifiedName": "ANC Follow-up Status",
+      "shortName": "ANC Follow-up Status",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": ["LOCAL:active-follow-up", "LOCAL:delivered-state"]
+    },
+    {
+      "id": "active-follow-up",
+      "fullySpecifiedName": "Active follow-up",
+      "shortName": "Active follow-up",
+      "dataClass": "State",
+      "dataType": "Coded"
+    },
+    {
+      "id": "delivered-state",
+      "fullySpecifiedName": "Delivered",
+      "shortName": "Delivered",
+      "dataClass": "State",
+      "dataType": "Coded"
+    },
+    {
+      "id": "registration-queue-service",
+      "fullySpecifiedName": "Registration queue service",
+      "shortName": "Registration Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "antenatal-queue-service",
+      "fullySpecifiedName": "Antenatal queue service",
+      "shortName": "ANC Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "cashier-queue-service",
+      "fullySpecifiedName": "Cashier queue service",
+      "shortName": "Cashier Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-waiting",
+      "fullySpecifiedName": "Waiting",
+      "shortName": "Waiting",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-in-progress",
+      "fullySpecifiedName": "In progress",
+      "shortName": "In Progress",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-completed",
+      "fullySpecifiedName": "Completed",
+      "shortName": "Completed",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-set",
+      "fullySpecifiedName": "Queue Status Set",
+      "shortName": "Queue Statuses",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-status-waiting",
+        "LOCAL:queue-status-in-progress",
+        "LOCAL:queue-status-completed"
+      ]
+    },
+    {
+      "id": "queue-priority-routine",
+      "fullySpecifiedName": "Routine",
+      "shortName": "Routine",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-urgent",
+      "fullySpecifiedName": "Urgent",
+      "shortName": "Urgent",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-emergency",
+      "fullySpecifiedName": "Emergency",
+      "shortName": "Emergency",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-set",
+      "fullySpecifiedName": "Queue Priority Set",
+      "shortName": "Queue Priorities",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-priority-routine",
+        "LOCAL:queue-priority-urgent",
+        "LOCAL:queue-priority-emergency"
+      ]
+    }
+  ],
+  "encounterTypes": [
+    {
+      "id": "anc-registration",
+      "name": "ANC Registration Encounter"
+    },
+    {
+      "id": "anc-consult",
+      "name": "ANC Consultation Encounter"
+    },
+    {
+      "id": "anc-dispense",
+      "name": "ANC Dispensing Encounter"
+    }
+  ],
+  "forms": [
+    {
+      "id": "anc-intake-form",
+      "name": "ANC Intake Form",
+      "description": "Initial antenatal intake form",
+      "encounter": "anc-consult",
+      "pages": [
+        {
+          "id": "anc-page",
+          "label": "ANC Intake",
+          "sections": [
+            {
+              "id": "ob-history",
+              "label": "Obstetric History",
+              "questions": [
+                {
+                  "id": "gravidity",
+                  "label": "Gravidity",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5624"
+                  }
+                },
+                {
+                  "id": "gestational-age",
+                  "label": "Gestational Age",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "LOCAL:gestational-age"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "queues": [
+    {
+      "id": "anc-registration-queue",
+      "name": "ANC Registration Queue",
+      "locationId": "front-desk",
+      "serviceConcept": "LOCAL:registration-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "anc-consult-queue",
+      "name": "ANC Consultation Queue",
+      "locationId": "anc-room",
+      "serviceConcept": "LOCAL:antenatal-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "anc-cashier-queue",
+      "name": "ANC Cashier Queue",
+      "locationId": "cashier-room",
+      "serviceConcept": "LOCAL:cashier-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    }
+  ],
+  "routingRules": [
+    {
+      "id": "anc-registration-to-consult",
+      "fromQueueId": "anc-registration-queue",
+      "toQueueId": "anc-consult-queue",
+      "mode": "recommended"
+    },
+    {
+      "id": "anc-consult-to-cashier",
+      "fromQueueId": "anc-consult-queue",
+      "toQueueId": "anc-cashier-queue",
+      "mode": "conditional",
+      "requiresPayment": true
+    }
+  ],
+  "billingModel": {
+    "billableServices": [
+      {
+        "id": "anc-visit-service",
+        "serviceName": "ANC Visit",
+        "shortName": "ANCV",
+        "concept": "CIEL:1771",
+        "serviceType": "LOCAL:antenatal-services",
+        "serviceStatus": "Enabled"
+      },
+      {
+        "id": "ultrasound-service",
+        "serviceName": "Obstetric Ultrasound",
+        "shortName": "SCAN",
+        "concept": "CIEL:1271",
+        "serviceType": "LOCAL:imaging-services",
+        "serviceStatus": "Enabled"
+      }
+    ],
+    "paymentModes": [
+      {
+        "id": "cash-mode",
+        "name": "Cash"
+      },
+      {
+        "id": "voucher-mode",
+        "name": "Voucher",
+        "attributes": [
+          {
+            "name": "Voucher ID",
+            "format": "Text",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "cashPoints": [
+      {
+        "id": "anc-cash-point",
+        "name": "ANC Cash Point",
+        "locationId": "cashier-room"
+      }
+    ]
+  },
+  "stockPharmacyModel": {
+    "stockLocations": [
+      {
+        "id": "anc-pharmacy-stock",
+        "locationId": "pharmacy-room",
+        "tags": ["dispensing"]
+      }
+    ],
+    "operationTypes": [
+      {
+        "id": "dispense-operation",
+        "name": "Dispense",
+        "allowedLocationIds": ["pharmacy-room"]
+      }
+    ]
+  },
+  "programs": [
+    {
+      "id": "antenatal-program",
+      "programConcept": "LOCAL:antenatal-program",
+      "outcomesConcept": "LOCAL:antenatal-program-outcomes"
+    }
+  ],
+  "programWorkflows": [
+    {
+      "id": "anc-follow-up-workflow",
+      "programId": "antenatal-program",
+      "workflowConcept": "LOCAL:anc-follow-up-status"
+    }
+  ],
+  "programWorkflowStates": [
+    {
+      "id": "anc-active-state",
+      "workflowId": "anc-follow-up-workflow",
+      "stateConcept": "LOCAL:active-follow-up",
+      "initial": true
+    },
+    {
+      "id": "anc-completed-state",
+      "workflowId": "anc-follow-up-workflow",
+      "stateConcept": "LOCAL:delivered-state",
+      "terminal": true
+    }
+  ],
+  "labModel": {
+    "enabled": true,
+    "departmentLocationId": "lab-room",
+    "integratedOrdering": true,
+    "specimenHandoffMode": "manual",
+    "resultDeliveryMode": "fhir",
+    "resultReviewerRoleIds": ["midwife"]
+  },
+  "imagingModel": {
+    "enabled": true,
+    "departmentLocationId": "anc-room",
+    "defaultViewer": "oe2",
+    "studyShareEnabled": true,
+    "rolePermissions": {
+      "obstetrician": ["view", "download", "share", "api-view"]
+    },
+    "authorizedLabels": {
+      "obstetrician": ["*"]
+    }
+  },
+  "identityModel": {
+    "roles": [
+      {
+        "id": "admin",
+        "name": "Admin",
+        "openmrsRoles": ["Organizational: System Administrator"],
+        "openelisRoles": ["admin"],
+        "orthancPermissions": ["all"]
+      },
+      {
+        "id": "midwife",
+        "name": "Midwife",
+        "openmrsRoles": ["Organizational: Doctor", "Provider"]
+      },
+      {
+        "id": "obstetrician",
+        "name": "Obstetrician",
+        "keycloakRoles": ["doctor"],
+        "openmrsRoles": ["Organizational: Doctor", "Provider"]
+      },
+      {
+        "id": "lab-tech",
+        "name": "Lab Technician",
+        "keycloakRoles": ["lab-technician"],
+        "openelisRoles": ["lab-technician"]
+      }
+    ],
+    "users": [
+      {
+        "username": "hope.admin",
+        "firstName": "Hope",
+        "lastName": "Admin",
+        "roleIds": ["admin"]
+      },
+      {
+        "username": "midwife.1",
+        "firstName": "Grace",
+        "lastName": "Nakaweesi",
+        "roleIds": ["midwife"]
+      }
+    ]
+  },
+  "governance": {
+    "approvalRequired": true,
+    "allowedRequestorRoleIds": ["admin"],
+    "dryRunByDefault": true,
+    "changeTicketPrefix": "ANC"
+  }
+}

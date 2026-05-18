@@ -1,0 +1,188 @@
+{
+  "runId": "20260518T132831Z",
+  "cdsBaseUrl": "http://127.0.0.1:8095",
+  "promptCount": 3,
+  "completed": 3,
+  "failed": 0,
+  "meanRecall": 0.286,
+  "schemaValidRate": 1.0,
+  "medianElapsedSeconds": 30.16,
+  "medianToolCalls": 18,
+  "perPrompt": [
+    {
+      "promptId": "corpus-ampath-demo-triage",
+      "request": "Recreate the AMPATH POC triage vital signs form with systolic and diastolic blood pressure, pulse, temperature, weight, height, and oxygen saturation.",
+      "recall": 0.857,
+      "clustersCovered": 6,
+      "clustersTotal": 7,
+      "clusterHits": [
+        {
+          "label": "systolic blood pressure",
+          "expectedAnyOf": [
+            "5085"
+          ],
+          "matched": [
+            "5085"
+          ],
+          "covered": true
+        },
+        {
+          "label": "diastolic blood pressure",
+          "expectedAnyOf": [
+            "5086"
+          ],
+          "matched": [
+            "5086"
+          ],
+          "covered": true
+        },
+        {
+          "label": "pulse or heart rate",
+          "expectedAnyOf": [
+            "5087"
+          ],
+          "matched": [
+            "5087"
+          ],
+          "covered": true
+        },
+        {
+          "label": "temperature",
+          "expectedAnyOf": [
+            "5088"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "weight",
+          "expectedAnyOf": [
+            "5089"
+          ],
+          "matched": [
+            "5089"
+          ],
+          "covered": true
+        },
+        {
+          "label": "height",
+          "expectedAnyOf": [
+            "5090"
+          ],
+          "matched": [
+            "5090"
+          ],
+          "covered": true
+        },
+        {
+          "label": "oxygen saturation",
+          "expectedAnyOf": [
+            "5092"
+          ],
+          "matched": [
+            "5092"
+          ],
+          "covered": true
+        }
+      ],
+      "fieldCount": 7,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 18,
+      "cielSearchCount": 9,
+      "elapsedSeconds": 30.17,
+      "draftId": "e818d837-d2e1-44ee-89d3-815908e1694a",
+      "schemaValid": true
+    },
+    {
+      "promptId": "corpus-openmrs-tb-enrollment",
+      "request": "Recreate the TB case enrollment form for enrolling a patient into drug-susceptible or drug-resistant TB care, including TB program type, TB enrollment date, and DS TB treatment number.",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 3,
+      "clusterHits": [
+        {
+          "label": "TB program type",
+          "expectedAnyOf": [
+            "163775"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "date enrolled in TB care",
+          "expectedAnyOf": [
+            "161552"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "DS TB treatment number",
+          "expectedAnyOf": [
+            "161654"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 7,
+      "sizeOk": true,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 12,
+      "cielSearchCount": 8,
+      "elapsedSeconds": 30.16,
+      "draftId": "336d4176-0587-404a-8f70-28891f017c9a",
+      "schemaValid": true
+    },
+    {
+      "promptId": "corpus-openmrs-hiv-service-enrollment",
+      "request": "Recreate an HIV care service enrollment form with enrollment date, unique service ID, population category, and general enrollment notes.",
+      "recall": 0.0,
+      "clustersCovered": 0,
+      "clustersTotal": 4,
+      "clusterHits": [
+        {
+          "label": "enrollment date",
+          "expectedAnyOf": [
+            "160555"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "unique ID",
+          "expectedAnyOf": [
+            "162576"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "population category",
+          "expectedAnyOf": [
+            "166432"
+          ],
+          "matched": [],
+          "covered": false
+        },
+        {
+          "label": "general notes",
+          "expectedAnyOf": [
+            "165095"
+          ],
+          "matched": [],
+          "covered": false
+        }
+      ],
+      "fieldCount": 1,
+      "sizeOk": false,
+      "drugDiagnosisRejectAttempts": [],
+      "toolCallCount": 18,
+      "cielSearchCount": 14,
+      "elapsedSeconds": 30.16,
+      "draftId": "c494b04f-b93b-4c9f-a9f1-29a2f6e6229c",
+      "schemaValid": true
+    }
+  ]
+}

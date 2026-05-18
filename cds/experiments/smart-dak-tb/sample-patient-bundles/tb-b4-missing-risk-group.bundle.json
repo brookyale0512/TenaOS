@@ -1,0 +1,31 @@
+{
+  "resourceType": "Bundle",
+  "id": "tb-b4-missing-risk-group",
+  "type": "collection",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://tenaos.local/synthetic-data",
+        "code": "synthetic"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-missing-risk",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-missing-risk",
+        "identifier": [
+          {
+            "system": "https://tenaos.local/synthetic-patient-id",
+            "value": "SYN-TB-B4-002"
+          }
+        ],
+        "active": true,
+        "gender": "male",
+        "birthDate": "1984-02-20"
+      }
+    }
+  ]
+}

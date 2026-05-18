@@ -1,0 +1,56 @@
+{
+  "resourceType": "Bundle",
+  "id": "tb-b4-adult-contact",
+  "type": "collection",
+  "meta": {
+    "tag": [
+      {
+        "system": "https://tenaos.local/synthetic-data",
+        "code": "synthetic"
+      }
+    ]
+  },
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-adult-contact",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-adult-contact",
+        "identifier": [
+          {
+            "system": "https://tenaos.local/synthetic-patient-id",
+            "value": "SYN-TB-B4-001"
+          }
+        ],
+        "active": true,
+        "gender": "female",
+        "birthDate": "1991-05-10"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:obs-risk-group",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "obs-risk-group",
+        "status": "final",
+        "code": {
+          "text": "TB risk group"
+        },
+        "subject": {
+          "reference": "Patient/patient-adult-contact"
+        },
+        "effectiveDateTime": "2026-05-10T09:00:00Z",
+        "valueCodeableConcept": {
+          "coding": [
+            {
+              "system": "https://tenaos.local/fhir/CodeSystem/tb-risk-group",
+              "code": "household-contact",
+              "display": "Household contact of a person with TB"
+            }
+          ],
+          "text": "Household contact of a person with TB"
+        }
+      }
+    }
+  ]
+}

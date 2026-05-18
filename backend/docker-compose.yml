@@ -1,0 +1,73 @@
+services:
+  openmrs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tenaos-openmrs:latest
+    container_name: tenaos_openmrs
+    restart: unless-stopped
+    environment:
+      TENAOS_PUBLIC_HOST: ${TENAOS_PUBLIC_HOST:-localhost}
+      OPENMRS_PORT: ${OPENMRS_PORT:-18080}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME:-openmrs}
+      OPENMRS_DB_USER: ${OPENMRS_DB_USER:-openmrs}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:-tenaos_openmrs}
+      OPENMRS_ADMIN_PASSWORD: ${OPENMRS_ADMIN_PASSWORD:-Admin123}
+      OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx1g}
+      OPENMRS_KEYCLOAK_ENABLED: "false"
+      OPENMRS_VERIFY_USERNAME: ${OPENMRS_HEALTHCHECK_USERNAME:-admin}
+      OPENMRS_VERIFY_PASSWORD: ${OPENMRS_HEALTHCHECK_PASSWORD:-${OPENMRS_ADMIN_PASSWORD:-Admin123}}
+    ports:
+      - "${OPENMRS_PORT:-18080}:8080"
+    volumes:
+      - tenaos-openmrs-data:/opt/openmrs/data
+      - tenaos-mariadb-data:/var/lib/mysql
+      - ./metadata/openmrs-managed-config:/opt/tenaos/data/emr-os/openmrs-managed-config
+    healthcheck:
+      # Healthchecks authenticate as the least-privilege healthcheck user when
+      # OPENMRS_HEALTHCHECK_USERNAME / OPENMRS_HEALTHCHECK_PASSWORD are set in
+      # the deployment environment, falling back to admin only in dev.
+      test: ["CMD", "/opt/tenaos/scripts/verify-lite.sh", "--internal", "--healthcheck"]
+      interval: 30s
+      timeout: 20s
+      retries: 20
+      start_period: 300s
+
+  cds:
+    build:
+      context: ..
+      dockerfile: cds/service/Dockerfile
+    image: tenaos-cds:latest
+    container_name: tenaos_cds
+    restart: unless-stopped
+    depends_on:
+      - openmrs
+    environment:
+      CDS_SERVICE_PORT: 8095
+      OPENMRS_REST_BASE_URL: http://openmrs:8080/openmrs/ws/rest/v1
+      OPENMRS_FHIR_BASE_URL: http://openmrs:8080/openmrs/ws/fhir2/R4
+      VLLM_BASE_URL: ${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      VLLM_MODEL: ${VLLM_MODEL:-gemma-4}
+      # Clinical UUID contract — must match required-openmrs-metadata.json.
+      # Override in your deployment .env if you use a non-standard OpenMRS distribution.
+      CLINICAL_NOTE_ENCOUNTER_TYPE_UUID: ${CLINICAL_NOTE_ENCOUNTER_TYPE_UUID:-d7151f82-c1f3-4152-a605-2f9ea7414a79}
+      CLINICAL_NOTE_CONCEPT_UUID: ${CLINICAL_NOTE_CONCEPT_UUID:-162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+      # CORS: comma-separated list of origins allowed to call the CDS API.
+      # In production set this to your public frontend URL (e.g. https://tenaos.example.org).
+      CDS_CORS_ORIGINS: ${CDS_CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${CDS_SERVICE_PORT:-8095}:8095"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health', timeout=3)"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  tenaos-openmrs-data:
+    name: tenaos_openmrs_data
+  tenaos-mariadb-data:
+    name: tenaos_mariadb_data

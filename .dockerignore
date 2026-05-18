@@ -1,0 +1,40 @@
+# Dockerignore for the workspace-root build context used by frontend/Dockerfile.
+# Keeps the build context small and makes sure secrets / dumps never enter
+# the image, even if a developer left them in their working tree.
+
+# Heavy / generated frontend artifacts.
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Backend image build artifacts (copied from the OpenMRS distro at backend
+# build time, not needed for the frontend image).
+backend/build-cache/
+
+# Runtime / clinical data must never enter any image.
+runtime-artifacts/
+**/*.sql
+**/*.sql.gz
+**/*.dump
+**/*.bak
+
+# VCS / editor noise.
+.git/
+.github/
+.idea/
+.vscode/
+.DS_Store
+
+# Logs.
+**/*.log
+
+# Top-level dev tooling we don't ship.
+docs/
+PHASE1_VALIDATION.md
+CHANGELOG.md

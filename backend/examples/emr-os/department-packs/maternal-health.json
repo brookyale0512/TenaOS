@@ -1,0 +1,237 @@
+{
+  "packId": "maternal-health",
+  "name": "Maternal Health Clinic",
+  "description": "Maternal health specialty pack with ANC intake and follow-up workflow.",
+  "compatibleArchetypes": ["specialty-clinic", "district-hospital"],
+  "config": {
+    "localConcepts": [
+      {
+        "id": "gestational-age",
+        "fullySpecifiedName": "Gestational Age",
+        "shortName": "Gestational Age",
+        "dataClass": "Question",
+        "dataType": "Numeric"
+      },
+      {
+        "id": "antenatal-services",
+        "fullySpecifiedName": "Antenatal Services",
+        "shortName": "Antenatal Services",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "antenatal-program",
+        "fullySpecifiedName": "Antenatal Program",
+        "shortName": "Antenatal Program",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "antenatal-program-outcomes",
+        "fullySpecifiedName": "Antenatal Program Outcomes",
+        "shortName": "Antenatal Program Outcomes",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": ["LOCAL:active-follow-up", "LOCAL:delivered-state"]
+      },
+      {
+        "id": "anc-follow-up-status",
+        "fullySpecifiedName": "ANC Follow-up Status",
+        "shortName": "ANC Follow-up Status",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": ["LOCAL:active-follow-up", "LOCAL:delivered-state"]
+      },
+      {
+        "id": "active-follow-up",
+        "fullySpecifiedName": "Active follow-up",
+        "shortName": "Active follow-up",
+        "dataClass": "State",
+        "dataType": "Coded"
+      },
+      {
+        "id": "delivered-state",
+        "fullySpecifiedName": "Delivered",
+        "shortName": "Delivered",
+        "dataClass": "State",
+        "dataType": "Coded"
+      },
+      {
+        "id": "antenatal-queue-service",
+        "fullySpecifiedName": "Antenatal queue service",
+        "shortName": "ANC Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-waiting",
+        "fullySpecifiedName": "Waiting (ANC Queue)",
+        "shortName": "Waiting",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-in-progress",
+        "fullySpecifiedName": "In progress (ANC Queue)",
+        "shortName": "In Progress",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-completed",
+        "fullySpecifiedName": "Completed (ANC Queue)",
+        "shortName": "Completed",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-set",
+        "fullySpecifiedName": "ANC Queue Status Set",
+        "shortName": "ANC Queue Statuses",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-status-waiting",
+          "LOCAL:queue-status-in-progress",
+          "LOCAL:queue-status-completed"
+        ]
+      },
+      {
+        "id": "queue-priority-routine",
+        "fullySpecifiedName": "Routine (ANC Queue)",
+        "shortName": "Routine",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-urgent",
+        "fullySpecifiedName": "Urgent (ANC Queue)",
+        "shortName": "Urgent",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-emergency",
+        "fullySpecifiedName": "Emergency (ANC Queue)",
+        "shortName": "Emergency",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-set",
+        "fullySpecifiedName": "ANC Queue Priority Set",
+        "shortName": "ANC Queue Priorities",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-priority-routine",
+          "LOCAL:queue-priority-urgent",
+          "LOCAL:queue-priority-emergency"
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "anc-clinic",
+        "name": "ANC Clinic",
+        "kind": "department"
+      }
+    ],
+    "encounterTypes": [
+      {
+        "id": "anc-consult-encounter",
+        "name": "ANC Consultation Encounter"
+      }
+    ],
+    "forms": [
+      {
+        "id": "anc-intake-form",
+        "name": "ANC Intake Form",
+        "description": "Initial antenatal intake form",
+        "encounter": "anc-consult-encounter",
+        "pages": [
+          {
+            "id": "anc-page",
+            "label": "ANC Intake",
+            "sections": [
+              {
+                "id": "ob-history",
+                "label": "Obstetric History",
+                "questions": [
+                  {
+                    "id": "gravidity",
+                    "label": "Gravidity",
+                    "type": "obs",
+                    "questionOptions": {
+                      "rendering": "number",
+                      "concept": "CIEL:5624"
+                    }
+                  },
+                  {
+                    "id": "gestational-age",
+                    "label": "Gestational Age",
+                    "type": "obs",
+                    "questionOptions": {
+                      "rendering": "number",
+                      "concept": "LOCAL:gestational-age"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "queues": [
+      {
+        "id": "anc-queue",
+        "name": "ANC Queue",
+        "locationId": "anc-clinic",
+        "serviceConcept": "LOCAL:antenatal-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      }
+    ],
+    "billingModel": {
+      "billableServices": [
+        {
+          "id": "anc-visit-service",
+          "serviceName": "ANC Visit",
+          "shortName": "ANCV",
+          "concept": "CIEL:1771",
+          "serviceType": "LOCAL:antenatal-services",
+          "serviceStatus": "Enabled"
+        }
+      ]
+    },
+    "programs": [
+      {
+        "id": "antenatal-program",
+        "programConcept": "LOCAL:antenatal-program",
+        "outcomesConcept": "LOCAL:antenatal-program-outcomes"
+      }
+    ],
+    "programWorkflows": [
+      {
+        "id": "anc-follow-up-workflow",
+        "programId": "antenatal-program",
+        "workflowConcept": "LOCAL:anc-follow-up-status"
+      }
+    ],
+    "programWorkflowStates": [
+      {
+        "id": "anc-active-state",
+        "workflowId": "anc-follow-up-workflow",
+        "stateConcept": "LOCAL:active-follow-up",
+        "initial": true
+      },
+      {
+        "id": "anc-completed-state",
+        "workflowId": "anc-follow-up-workflow",
+        "stateConcept": "LOCAL:delivered-state",
+        "terminal": true
+      }
+    ]
+  }
+}

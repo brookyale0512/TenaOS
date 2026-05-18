@@ -1,0 +1,602 @@
+{
+  "schemaVersion": "1.0",
+  "archetype": "district-hospital",
+  "facilityProfile": {
+    "code": "district-hospital",
+    "name": "River District Hospital",
+    "facilityType": "district-hospital",
+    "ownership": "public",
+    "country": "Tanzania",
+    "timezone": "Africa/Dar_es_Salaam",
+    "languages": ["en", "sw"],
+    "defaultCurrency": "TZS"
+  },
+  "locations": [
+    {
+      "id": "hospital-main",
+      "name": "River District Hospital",
+      "kind": "facility",
+      "facilityLocation": true,
+      "address": {
+        "cityVillage": "Morogoro",
+        "country": "Tanzania"
+      }
+    },
+    {
+      "id": "opd-registration",
+      "name": "OPD Registration",
+      "kind": "department",
+      "parentId": "hospital-main",
+      "loginLocation": true
+    },
+    {
+      "id": "opd-triage",
+      "name": "OPD Triage",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "opd-consult",
+      "name": "OPD Consultation",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "lab-department",
+      "name": "Laboratory",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "radiology-department",
+      "name": "Radiology",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "cashier-department",
+      "name": "Hospital Cashier",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "pharmacy-department",
+      "name": "Hospital Pharmacy",
+      "kind": "department",
+      "parentId": "hospital-main"
+    },
+    {
+      "id": "maternity-ward",
+      "name": "Maternity Ward",
+      "kind": "department",
+      "parentId": "hospital-main"
+    }
+  ],
+  "registrationModel": {
+    "loginLocationId": "opd-registration",
+    "walkInAllowed": true,
+    "appointmentMode": "hybrid",
+    "identifierStrategy": {
+      "identifierType": "OpenMRS ID",
+      "baseCharacterSet": "0123456789",
+      "firstIdentifierBase": "30001",
+      "prefix": "RDH-",
+      "minLength": 8,
+      "maxLength": 12
+    }
+  },
+  "localConcepts": [
+    {
+      "id": "outpatient-services",
+      "fullySpecifiedName": "Outpatient Services",
+      "shortName": "Outpatient Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "laboratory-services",
+      "fullySpecifiedName": "Laboratory Services",
+      "shortName": "Laboratory Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "imaging-services",
+      "fullySpecifiedName": "Imaging Services",
+      "shortName": "Imaging Services",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "tb-program",
+      "fullySpecifiedName": "TB Program",
+      "shortName": "TB Program",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "tb-program-outcomes",
+      "fullySpecifiedName": "TB Program Outcomes",
+      "shortName": "TB Program Outcomes",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": ["LOCAL:tb-treatment-active-state", "LOCAL:tb-treatment-defaulted-state"]
+    },
+    {
+      "id": "tb-treatment-status-workflow",
+      "fullySpecifiedName": "TB Treatment Status (workflow)",
+      "shortName": "TB Treatment Status",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": ["LOCAL:tb-treatment-active-state", "LOCAL:tb-treatment-defaulted-state"]
+    },
+    {
+      "id": "tb-treatment-active-state",
+      "fullySpecifiedName": "Active treatment (initial)",
+      "shortName": "Active treatment",
+      "dataClass": "State",
+      "dataType": "Coded"
+    },
+    {
+      "id": "tb-treatment-defaulted-state",
+      "fullySpecifiedName": "Defaulted",
+      "shortName": "Defaulted",
+      "dataClass": "State",
+      "dataType": "Coded"
+    },
+    {
+      "id": "registration-queue-service",
+      "fullySpecifiedName": "Registration queue service",
+      "shortName": "Registration Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "triage-queue-service",
+      "fullySpecifiedName": "Triage queue service",
+      "shortName": "Triage Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "consultation-queue-service",
+      "fullySpecifiedName": "Consultation queue service",
+      "shortName": "Consultation Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "laboratory-queue-service",
+      "fullySpecifiedName": "Laboratory queue service",
+      "shortName": "Laboratory Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "imaging-queue-service",
+      "fullySpecifiedName": "Imaging queue service",
+      "shortName": "Imaging Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "cashier-queue-service",
+      "fullySpecifiedName": "Cashier queue service",
+      "shortName": "Cashier Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "pharmacy-queue-service",
+      "fullySpecifiedName": "Pharmacy queue service",
+      "shortName": "Pharmacy Service",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-waiting",
+      "fullySpecifiedName": "Waiting",
+      "shortName": "Waiting",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-in-progress",
+      "fullySpecifiedName": "In progress",
+      "shortName": "In Progress",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-completed",
+      "fullySpecifiedName": "Completed",
+      "shortName": "Completed",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-status-set",
+      "fullySpecifiedName": "Queue Status Set",
+      "shortName": "Queue Statuses",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-status-waiting",
+        "LOCAL:queue-status-in-progress",
+        "LOCAL:queue-status-completed"
+      ]
+    },
+    {
+      "id": "queue-priority-routine",
+      "fullySpecifiedName": "Routine",
+      "shortName": "Routine",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-urgent",
+      "fullySpecifiedName": "Urgent",
+      "shortName": "Urgent",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-emergency",
+      "fullySpecifiedName": "Emergency",
+      "shortName": "Emergency",
+      "dataClass": "Misc",
+      "dataType": "N/A"
+    },
+    {
+      "id": "queue-priority-set",
+      "fullySpecifiedName": "Queue Priority Set",
+      "shortName": "Queue Priorities",
+      "dataClass": "ConvSet",
+      "dataType": "N/A",
+      "members": [
+        "LOCAL:queue-priority-routine",
+        "LOCAL:queue-priority-urgent",
+        "LOCAL:queue-priority-emergency"
+      ]
+    }
+  ],
+  "encounterTypes": [
+    {
+      "id": "opd-registration-encounter",
+      "name": "OPD Registration Encounter"
+    },
+    {
+      "id": "opd-triage-encounter",
+      "name": "OPD Triage Encounter"
+    },
+    {
+      "id": "opd-consult-encounter",
+      "name": "OPD Consultation Encounter"
+    },
+    {
+      "id": "radiology-encounter",
+      "name": "Radiology Encounter"
+    }
+  ],
+  "forms": [
+    {
+      "id": "hospital-triage-form",
+      "name": "Hospital Triage Form",
+      "description": "Shared triage form for outpatient services",
+      "encounter": "opd-triage-encounter",
+      "pages": [
+        {
+          "id": "triage-page",
+          "label": "Vitals",
+          "sections": [
+            {
+              "id": "vitals",
+              "label": "Vitals",
+              "questions": [
+                {
+                  "id": "weight",
+                  "label": "Weight",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5089"
+                  }
+                },
+                {
+                  "id": "bp-systolic",
+                  "label": "Systolic Blood Pressure",
+                  "type": "obs",
+                  "questionOptions": {
+                    "rendering": "number",
+                    "concept": "CIEL:5085"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "queues": [
+    {
+      "id": "registration-queue",
+      "name": "OPD Registration Queue",
+      "locationId": "opd-registration",
+      "serviceConcept": "LOCAL:registration-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "triage-queue",
+      "name": "OPD Triage Queue",
+      "locationId": "opd-triage",
+      "serviceConcept": "LOCAL:triage-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "consult-queue",
+      "name": "OPD Consultation Queue",
+      "locationId": "opd-consult",
+      "serviceConcept": "LOCAL:consultation-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "lab-queue",
+      "name": "Laboratory Queue",
+      "locationId": "lab-department",
+      "serviceConcept": "LOCAL:laboratory-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "radiology-queue",
+      "name": "Radiology Queue",
+      "locationId": "radiology-department",
+      "serviceConcept": "LOCAL:imaging-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "cashier-queue",
+      "name": "Cashier Queue",
+      "locationId": "cashier-department",
+      "serviceConcept": "LOCAL:cashier-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    },
+    {
+      "id": "pharmacy-queue",
+      "name": "Pharmacy Queue",
+      "locationId": "pharmacy-department",
+      "serviceConcept": "LOCAL:pharmacy-queue-service",
+      "statusConceptSet": "LOCAL:queue-status-set",
+      "priorityConceptSet": "LOCAL:queue-priority-set"
+    }
+  ],
+  "routingRules": [
+    {
+      "id": "registration-to-triage",
+      "fromQueueId": "registration-queue",
+      "toQueueId": "triage-queue",
+      "mode": "recommended"
+    },
+    {
+      "id": "triage-to-consult",
+      "fromQueueId": "triage-queue",
+      "toQueueId": "consult-queue",
+      "mode": "recommended"
+    },
+    {
+      "id": "consult-to-cashier",
+      "fromQueueId": "consult-queue",
+      "toQueueId": "cashier-queue",
+      "mode": "conditional",
+      "requiresPayment": true
+    },
+    {
+      "id": "consult-to-lab",
+      "fromQueueId": "consult-queue",
+      "toQueueId": "lab-queue",
+      "mode": "conditional",
+      "requiresPayment": true
+    },
+    {
+      "id": "consult-to-radiology",
+      "fromQueueId": "consult-queue",
+      "toQueueId": "radiology-queue",
+      "mode": "conditional",
+      "requiresPayment": true
+    },
+    {
+      "id": "cashier-to-pharmacy",
+      "fromQueueId": "cashier-queue",
+      "toQueueId": "pharmacy-queue",
+      "mode": "recommended"
+    }
+  ],
+  "billingModel": {
+    "billableServices": [
+      {
+        "id": "consult-service",
+        "serviceName": "OPD Consultation",
+        "shortName": "OPDC",
+        "concept": "CIEL:160538",
+        "serviceType": "LOCAL:outpatient-services",
+        "serviceStatus": "Enabled"
+      },
+      {
+        "id": "lab-service",
+        "serviceName": "Laboratory Order",
+        "shortName": "LAB",
+        "concept": "CIEL:1271",
+        "serviceType": "LOCAL:laboratory-services",
+        "serviceStatus": "Enabled"
+      },
+      {
+        "id": "xray-service",
+        "serviceName": "Radiology Study",
+        "shortName": "XRAY",
+        "concept": "CIEL:1271",
+        "serviceType": "LOCAL:imaging-services",
+        "serviceStatus": "Enabled"
+      }
+    ],
+    "paymentModes": [
+      {
+        "id": "cash-mode",
+        "name": "Cash"
+      },
+      {
+        "id": "insurance-mode",
+        "name": "Insurance",
+        "attributes": [
+          {
+            "name": "Insurer",
+            "format": "Text",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "cashPoints": [
+      {
+        "id": "main-cash-point",
+        "name": "Main Cash Point",
+        "locationId": "cashier-department"
+      }
+    ],
+    "pricingRules": [
+      {
+        "id": "consult-standard",
+        "billableServiceId": "consult-service",
+        "amount": 7000,
+        "patientCategory": "standard",
+        "requiresPaymentBeforeService": true
+      }
+    ]
+  },
+  "stockPharmacyModel": {
+    "stockLocations": [
+      {
+        "id": "main-pharmacy-stock",
+        "locationId": "pharmacy-department",
+        "tags": ["dispensing", "main-store"]
+      }
+    ],
+    "operationTypes": [
+      {
+        "id": "dispense-operation",
+        "name": "Dispense",
+        "allowedLocationIds": ["pharmacy-department"]
+      }
+    ]
+  },
+  "programs": [
+    {
+      "id": "tb-program",
+      "programConcept": "LOCAL:tb-program",
+      "outcomesConcept": "LOCAL:tb-program-outcomes"
+    }
+  ],
+  "programWorkflows": [
+    {
+      "id": "tb-treatment-status",
+      "programId": "tb-program",
+      "workflowConcept": "LOCAL:tb-treatment-status-workflow"
+    }
+  ],
+  "programWorkflowStates": [
+    {
+      "id": "tb-active-treatment",
+      "workflowId": "tb-treatment-status",
+      "stateConcept": "LOCAL:tb-treatment-active-state",
+      "initial": true
+    },
+    {
+      "id": "tb-defaulted",
+      "workflowId": "tb-treatment-status",
+      "stateConcept": "LOCAL:tb-treatment-defaulted-state",
+      "terminal": true
+    }
+  ],
+  "labModel": {
+    "enabled": true,
+    "departmentLocationId": "lab-department",
+    "integratedOrdering": true,
+    "specimenHandoffMode": "manual",
+    "resultDeliveryMode": "fhir",
+    "resultReviewerRoleIds": ["doctor"]
+  },
+  "imagingModel": {
+    "enabled": true,
+    "departmentLocationId": "radiology-department",
+    "defaultViewer": "oe2",
+    "studyShareEnabled": true,
+    "rolePermissions": {
+      "radiologist": ["view", "download", "send", "share", "upload", "modify", "api-view", "worklists"],
+      "doctor": ["view", "download", "share", "api-view"]
+    },
+    "authorizedLabels": {
+      "radiologist": ["*"],
+      "doctor": ["*"]
+    }
+  },
+  "identityModel": {
+    "roles": [
+      {
+        "id": "admin",
+        "name": "Admin",
+        "openmrsRoles": ["Organizational: System Administrator"],
+        "openelisRoles": ["admin"],
+        "orthancPermissions": ["all"]
+      },
+      {
+        "id": "doctor",
+        "name": "Doctor",
+        "keycloakRoles": ["doctor"],
+        "openmrsRoles": ["Organizational: Doctor", "Provider"]
+      },
+      {
+        "id": "radiologist",
+        "name": "Radiologist",
+        "keycloakRoles": ["radiologist"],
+        "orthancPermissions": ["view", "download", "send", "share", "upload", "modify", "api-view", "worklists"]
+      },
+      {
+        "id": "lab-tech",
+        "name": "Lab Technician",
+        "keycloakRoles": ["lab-technician"],
+        "openelisRoles": ["lab-technician"]
+      }
+    ],
+    "users": [
+      {
+        "username": "river.admin",
+        "firstName": "River",
+        "lastName": "Admin",
+        "roleIds": ["admin"]
+      },
+      {
+        "username": "dr.msuya",
+        "firstName": "Asha",
+        "lastName": "Msuya",
+        "roleIds": ["doctor"]
+      },
+      {
+        "username": "rad.moses",
+        "firstName": "Moses",
+        "lastName": "Mlama",
+        "roleIds": ["radiologist"]
+      }
+    ]
+  },
+  "governance": {
+    "approvalRequired": true,
+    "allowedRequestorRoleIds": ["admin"],
+    "dryRunByDefault": true,
+    "changeTicketPrefix": "RDH"
+  }
+}

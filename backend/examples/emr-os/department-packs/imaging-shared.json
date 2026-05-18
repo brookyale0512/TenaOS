@@ -1,0 +1,119 @@
+{
+  "packId": "imaging-shared",
+  "name": "Shared Imaging",
+  "description": "Shared radiology or imaging service point.",
+  "compatibleArchetypes": ["general-outpatient", "specialty-clinic", "district-hospital", "primary-health-centre"],
+  "config": {
+    "localConcepts": [
+      {
+        "id": "imaging-services",
+        "fullySpecifiedName": "Imaging Services",
+        "shortName": "Imaging Services",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "imaging-queue-service",
+        "fullySpecifiedName": "Imaging queue service",
+        "shortName": "Imaging Service",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-waiting",
+        "fullySpecifiedName": "Waiting (Imaging Queue)",
+        "shortName": "Waiting",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-in-progress",
+        "fullySpecifiedName": "In progress (Imaging Queue)",
+        "shortName": "In Progress",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-completed",
+        "fullySpecifiedName": "Completed (Imaging Queue)",
+        "shortName": "Completed",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-status-set",
+        "fullySpecifiedName": "Imaging Queue Status Set",
+        "shortName": "Imaging Queue Statuses",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-status-waiting",
+          "LOCAL:queue-status-in-progress",
+          "LOCAL:queue-status-completed"
+        ]
+      },
+      {
+        "id": "queue-priority-routine",
+        "fullySpecifiedName": "Routine (Imaging Queue)",
+        "shortName": "Routine",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-urgent",
+        "fullySpecifiedName": "Urgent (Imaging Queue)",
+        "shortName": "Urgent",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-emergency",
+        "fullySpecifiedName": "Emergency (Imaging Queue)",
+        "shortName": "Emergency",
+        "dataClass": "Misc",
+        "dataType": "N/A"
+      },
+      {
+        "id": "queue-priority-set",
+        "fullySpecifiedName": "Imaging Queue Priority Set",
+        "shortName": "Imaging Queue Priorities",
+        "dataClass": "ConvSet",
+        "dataType": "N/A",
+        "members": [
+          "LOCAL:queue-priority-routine",
+          "LOCAL:queue-priority-urgent",
+          "LOCAL:queue-priority-emergency"
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": "radiology",
+        "name": "Radiology",
+        "kind": "department"
+      }
+    ],
+    "queues": [
+      {
+        "id": "imaging-queue",
+        "name": "Radiology Queue",
+        "locationId": "radiology",
+        "serviceConcept": "LOCAL:imaging-queue-service",
+        "statusConceptSet": "LOCAL:queue-status-set",
+        "priorityConceptSet": "LOCAL:queue-priority-set"
+      }
+    ],
+    "billingModel": {
+      "billableServices": [
+        {
+          "id": "imaging-service",
+          "serviceName": "Radiology Study",
+          "shortName": "XRAY",
+          "concept": "CIEL:1271",
+          "serviceType": "LOCAL:imaging-services",
+          "serviceStatus": "Enabled"
+        }
+      ]
+    }
+  }
+}
