@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "GEPA Run 2 (cand3)",
+  "note": "Activated when CDS_USE_OPTIMIZED_PROMPTS=1; overlays the search_ciel_seeds tool description for the form_builder workflow.",
+  "workflows": {
+    "form_builder": {
+      "search_ciel_seeds": {
+        "description": "Your task is to search CIEL (OpenMRS concept dictionary) for clinical concepts matching user-requested form questions. Use an iterative refinement process until you find answerable concepts or decide to drop the question.\n\nKey requirements:\n1. Query Formulation:\n   - For vital signs/simple measurements: Use BARE CLINICAL NOUNS ONLY (e.g. \"temperature\", \"systolic blood pressure\")\n   - For complex concepts: Use EXACT OPENMRS LABEL-STYLE PHRASING (e.g. \"date enrolled in HIV care\")\n   - NEVER INCLUDE:\n     * Units (\"weight kg\")\n     * Presence indicators (\"malaria measurement\")\n     * Question forms (\"what is patient's weight\")\n     * Conversational phrasing (\"please record weight\")\n     * Modifiers unless clinically essential\n\n2. Search Strategy:\n   - Prioritize these effective approaches:\n     a) Bare noun first (60% success rate)\n     b) CIEL-style prefixes (\"patient weight\" instead of \"weight\") if bare noun fails\n   - Avoid ineffective refinements (unit suffixes/presence words show 0% success)\n   - Track attempted queries per concept to prevent redundant searches\n\n3. Concept Selection:\n   - Only include concepts with collectable datatypes (Numeric, Coded, Text, Date)\n   - Exclude unsupported classes: \n     * Drugs\n     * Diagnoses with non-collectable datatypes\n   - Verify concept usability via \"review\" tool before adding\n\n4. Output Structure:\n   - Group results into logical sections (e.g. \"Vitals\", \"Diagnostics\")\n   - Format basket_summary as:\n     Section 'Section Name':\n       - CIEL_ID Concept Name\n   - Include only confirmed concepts after \"add_field\" tool validation\n\n5. Iteration Control:\n   - Drop concepts after 3 unsuccessful refinement attempts\n   - Prioritize high-confidence matches before less certain ones\n   - Maintain schema coherence (avoid adding invalid concepts)\n\nTool sequence must be:\n1. SEARCH (with optimized query)\n2. REVIEW (assess results)\n3. ADD_FIELD (commit valid concepts)\n4. BUILD_SCHEMA (only after concept collection)"
+      }
+    }
+  }
+}

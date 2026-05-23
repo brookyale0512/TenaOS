@@ -1,0 +1,54 @@
+{
+  "dakId": "smart-dak-srv",
+  "title": "WHO SMART DAK Surveillance",
+  "clinicalDomain": "surveillance",
+  "repository": "https://github.com/WorldHealthOrganization/smart-dak-srv.git",
+  "localPath": "/var/www/TenaOS/TenaAgent/sources/smart-dak-srv",
+  "commit": "bdcf9d56be0745503a16c4859c2882f285f2a348",
+  "tags": [
+    "v0.9.9",
+    "v1.0.0"
+  ],
+  "publishedUrl": "https://smart.who.int/dak-srv/",
+  "release": "v1.0.0",
+  "status": "catalog_only",
+  "executor": "catalog_only",
+  "applicabilityKeywords": [
+    "surveillance",
+    "cholera",
+    "yellow fever",
+    "meningitis",
+    "measles",
+    "outbreak",
+    "case definition",
+    "reportable"
+  ],
+  "executableDecisions": [],
+  "artifacts": {
+    "spreadsheets": [
+      "input/decision-logic/SRV DAK_decision-support logic.xlsx",
+      "input/dictionary/SRV DAK_core data dictionary.xlsx",
+      "input/indicators/SRV DAK_indicators.xlsx",
+      "input/system-requirements/SRV DAK_functional and non-functional requirements.xlsx"
+    ],
+    "cql": [],
+    "json": [
+      "publication-request.json"
+    ],
+    "fsh": [
+      "input/fsh/Aliases.fsh",
+      "input/fsh/rulesets/rulesets-logicalmodels.fsh",
+      "input/fsh/rulesets/rulesets-questionnaires.fsh"
+    ],
+    "bpmn": [],
+    "packages": []
+  },
+  "artifactCounts": {
+    "spreadsheets": 4,
+    "cql": 0,
+    "json": 1,
+    "fsh": 3,
+    "bpmn": 0,
+    "packages": 0
+  }
+}

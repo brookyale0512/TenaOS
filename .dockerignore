@@ -1,40 +1,47 @@
-# Dockerignore for the workspace-root build context used by frontend/Dockerfile.
-# Keeps the build context small and makes sure secrets / dumps never enter
-# the image, even if a developer left them in their working tree.
+# Build-context allowlist for every Dockerfile in this repo. Keeps images
+# small and prevents secrets / dumps / runtime data from being baked in.
 
-# Heavy / generated frontend artifacts.
-frontend/node_modules/
-frontend/dist/
-frontend/dist-ssr/
-frontend/coverage/
-frontend/playwright-report/
-frontend/test-results/
-frontend/.env
-frontend/.env.*
-!frontend/.env.example
+# Frontend artifacts.
+TenaOS-Frontend/node_modules/
+TenaOS-Frontend/dist/
+TenaOS-Frontend/dist-ssr/
+TenaOS-Frontend/coverage/
+TenaOS-Frontend/playwright-report/
+TenaOS-Frontend/test-results/
+TenaOS-Frontend/.env
+TenaOS-Frontend/.env.*
+!TenaOS-Frontend/.env.example
 
-# Backend image build artifacts (copied from the OpenMRS distro at backend
-# build time, not needed for the frontend image).
-backend/build-cache/
+# Backend image build artifacts.
+TenaOS-Backend/build-cache/
 
-# Runtime / clinical data must never enter any image.
+# Runtime / clinical data must NEVER enter any image.
 runtime-artifacts/
+TenaAgent/runtime/
 **/*.sql
 **/*.sql.gz
 **/*.dump
 **/*.bak
+**/*.sqlite
+**/*.sqlite3
 
-# VCS / editor noise.
+# Model weights are bind-mounted at runtime, not baked into images.
+models/*.gguf
+models/*.litertlm
+models/*.safetensors
+
+# VCS and editor noise.
 .git/
 .github/
 .idea/
 .vscode/
-.DS_Store
+.pytest_cache/
+__pycache__/
+*.py[cod]
 
-# Logs.
-**/*.log
-
-# Top-level dev tooling we don't ship.
-docs/
-PHASE1_VALIDATION.md
-CHANGELOG.md
+# Secrets.
+*-key.json
+*service-account*.json
+.env
+.env.*
+!.env.example

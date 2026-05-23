@@ -1,118 +1,231 @@
+<div align="center">
+
 # TenaOS
 
-> Previously known as ClinicDx (MedGemma challenge). Renamed to TenaOS for the
-> Gemma 4 build. *Tena* (ጤና) is the Amharic word for "health".
+**An AI-native clinical operating system for primary-care clinics in low- and middle-income countries.**
 
-TenaOS is the AI-native clinical operating system. It pairs a custom React/Vite
-frontend with the OpenMRS Reference Application 3 backend (Tomcat + MariaDB) in
-a single container, plus a same-origin nginx proxy that fronts both in
-production.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Powered by Gemma 4](https://img.shields.io/badge/Powered_by-Gemma_4_E4B-4285F4)](https://huggingface.co/google/gemma-4-E4B-it)
+[![OpenMRS](https://img.shields.io/badge/Built_on-OpenMRS_Ref--App_3-005f9c)](https://openmrs.org/)
+[![Docker](https://img.shields.io/badge/Deploy-Single_Docker_Image-2496ED?logo=docker&logoColor=white)](#five-minute-demo)
+[![Status](https://img.shields.io/badge/Status-Research_Preview-orange)](#scope)
 
-## Project layout
+</div>
 
-- `backend/` - OpenMRS image, supervisor config, health checks, import scripts.
-- `frontend/` - React/Vite SPA.
-- `docs/` - architecture, deployment, and operational notes.
-- `scripts/` - repo-wide helpers (CI hygiene guard, etc.).
-- `runtime-artifacts/` - **gitignored** local SQL dumps and pre-import backups.
-  Kept out of the working tree on commit; never published.
+---
 
-## Local runtime
+TenaOS pairs the OpenMRS electronic medical record with **TenaAgent** — a
+small, agentic AI service powered by Gemma 4 E4B — behind a single-page
+clinical workspace. The whole system is one safety boundary:
 
-```bash
-cd backend
-cp .env.example .env
-./scripts/start.sh
-./scripts/verify-lite.sh
+> **TenaAgent _proposes_. Deterministic middleware _verifies_. Clinicians
+> _approve_.**
+
+The agent never writes to OpenMRS directly. Every clinical change is a draft
+that a human approves through the UI.
+
+---
+
+## Architecture
+
+TenaOS ships as **one Docker image**. Inside, `supervisord` orchestrates eight
+processes on the container's localhost; nothing leaves the container except
+through `:80`.
+
+```mermaid
+flowchart LR
+    Clinician(["👤 Clinician"])
+
+    subgraph Container ["**tenaos:latest** — single container"]
+        direction TB
+
+        Nginx["🌐 **nginx** :80<br/>SPA + reverse proxy"]
+
+        subgraph AppRow ["Application services"]
+            direction LR
+            Agent["🧠 **TenaAgent**<br/>:8095"]
+            OMRS["🩺 **OpenMRS**<br/>Tomcat :8080"]
+        end
+
+        subgraph AIRow ["AI runtime"]
+            direction LR
+            LLM["⚡ **llama.cpp**<br/>Gemma 4 E4B BF16<br/>:8001"]
+            KBG["📚 **kb-guidelines**<br/>WHO + MSF<br/>:4276"]
+            KBC["📚 **kb-ciel**<br/>CIEL semantic<br/>:4277"]
+        end
+
+        subgraph DataRow ["State"]
+            direction LR
+            DB[("🗄️ MariaDB<br/>:3306")]
+            QD[("🔍 Qdrant<br/>:6333")]
+            CIEL[("📖 CIEL SQLite<br/>+ FTS5")]
+        end
+
+        Nginx --> Agent
+        Nginx --> OMRS
+        Agent --> OMRS
+        Agent --> LLM
+        Agent --> KBG
+        Agent --> KBC
+        Agent --> CIEL
+        OMRS --> DB
+        KBG --> QD
+        KBC --> QD
+    end
+
+    Clinician -->|"HTTPS"| Nginx
 ```
 
-OpenMRS is served at `http://localhost:18080/openmrs` by default. The frontend
-is served by `npm run dev` at `http://localhost:5173`.
+Both knowledge-base daemons load **EmbedGemma 300M** in-process and share a
+single Qdrant for hybrid (dense + BM25) retrieval. Bulky artifacts — the GGUF
+weights, EmbedGemma checkpoint, and CIEL SQLite — are bind-mounted from the
+host so the image stays small.
 
-### Authentication
+---
 
-The frontend uses native OpenMRS session auth: the user signs in at
-`/login`, OpenMRS issues a `JSESSIONID` cookie, and every subsequent
-request flows through nginx with `withCredentials`. There is no static
-admin Basic-auth header anywhere in the production image. For dev work
-against an OpenMRS that lacks a sign-in UI, set `OPENMRS_DEV_INJECT_BASIC=true`
-in `frontend/.env` to opt back into the legacy proxy injection.
+## What TenaAgent does
 
-## Importing a database dump
+| Workflow | What it produces |
+|---|---|
+| **Form Builder** | Natural-language → CIEL-valid OpenMRS forms |
+| **Decision Support** | WHO/MSF guideline-grounded recommendations at the encounter |
+| **Patient Material** | Plain-language education drafts in the patient's language |
+| **Report Builder** | Cohort/count reports from FHIR with citations |
+| **SOAP Scribe** | Audio + transcript → structured SOAP note draft |
+| **Lab Catalog** | Concept-aware lab search and ordering |
+| **Translation** | Across the patient encounter |
 
-Store local SQL dumps under `runtime-artifacts/openmrs/imports/`, then run:
+Every output is a **draft** until a clinician approves it.
 
-```bash
-cd backend
-./scripts/import-openmrs-db.sh ../runtime-artifacts/openmrs/imports/<dump>.sql
-```
+---
 
-The import script backs up the existing database into
-`runtime-artifacts/openmrs/backups/`, replaces the `openmrs` database, restores
-the image-bundled OpenMRS modules into the data volume, and restarts OpenMRS.
+## Five-minute demo
 
-The `runtime-artifacts/` directory is gitignored. The `scripts/ci-guard.sh`
-script (run in CI) fails the pipeline if any SQL dump or runtime artifact
-ever lands in version control.
-
-## Frontend
+**Requirements** — Linux host with an NVIDIA GPU (Ampere or newer), Docker
+with `nvidia-container-toolkit`, ~25 GB free disk.
 
 ```bash
-cd frontend
-npm ci
-npm run lint        # ESLint
-npm run typecheck   # tsc --noEmit
-npm test            # Vitest unit + RTL component
-npm run test:coverage
-npm run test:smoke  # legacy network probe against a live OpenMRS
-npm run test:e2e    # Playwright E2E (requires a running stack)
-npm run build
+# 1. Place the model files in ./models/
+#    See models/README.md for the conversion command.
+ls models/
+#  gemma-4-E4B-it-BF16.gguf          (~16 GB)
+#  mmproj-gemma-4-E4B-it-bf16.gguf   (~0.5 GB)
+
+# 2. Configure
+cp demo.env.example .env
+# Edit .env: rotate OPENMRS_*_PASSWORD,
+# point TENAOS_EMBED_MODEL_PATH at your EmbedGemma 300M directory,
+# point TENAOS_CIEL_SQLITE_PATH at your ciel_search.sqlite3.
+
+# 3. Launch the whole stack — one command.
+docker compose up -d
+
+# 4. Open the workspace
+open http://localhost:8080
 ```
 
-Frontend runtime assumptions are configured in `frontend/.env.example`. UUID
-defaults are sourced from `backend/metadata/required-openmrs-metadata.json` so
-the metadata contract and the SPA never drift; a Vitest assertion enforces this.
+A future release will pull all three artifacts from the official TenaOS
+HuggingFace organization on first run — see
+[`scripts/fetch-models.sh`](scripts/fetch-models.sh).
 
-For per-deployment overrides without a rebuild, edit
-`frontend/public/runtime-config.json` (rendered by nginx) -- the SPA fetches it
-on boot and applies any non-null fields over the build-time defaults.
+---
 
-## Production deployment
+## Models
 
-See [docs/production-deployment.md](docs/production-deployment.md).
-Highlights:
+| Component | Model | License |
+|---|---|---|
+| Generation | [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it) (BF16 GGUF) | [Gemma Terms of Use](https://ai.google.dev/gemma/terms) |
+| Embeddings | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | Gemma Terms of Use |
 
-- Native OpenMRS session login with `JSESSIONID` cookies.
-- nginx serves the SPA and reverse-proxies `/openmrs/` with strict CSP,
-  `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`, and
-  `Permissions-Policy` headers.
-- Healthchecks authenticate as a least-privilege OpenMRS user provisioned via
-  `backend/metadata/healthcheck-user.sql`; admin credentials are never used in
-  routine probes.
-- The frontend image bakes zero credentials. Any operator running the image
-  must supply an OpenMRS upstream URL; authentication happens through the user
-  sign-in flow.
+We standardize on **BF16 full precision** — no quantization in the production
+path. Multimodal audio input rides on Gemma 4's `mmproj` projector through
+`llama.cpp`.
 
-## Production status
+---
 
-TenaOS Phase 1 is feature-complete for the OpenMRS-only clinical
-workflow:
+## Repository layout
 
-- Patient registration end-to-end with IDGen auto-generation, identifier
-  format validation, and per-field server error mapping.
-- Visit-bound vitals, notes, and lab orders (orphan encounters are no longer
-  possible from the UI).
-- Native OpenMRS session login with `RequireAuth` route guarding.
-- Concept search pickers replace raw UUID input for diagnoses, notes, and lab
-  orders.
-- Comprehensive Vitest + RTL coverage on the critical-path libraries (>90% on
-  the audited surface) plus Playwright E2E specs for sign-in and registration.
+```
+TenaOS/
+├── Dockerfile                    Single all-in-one image
+├── docker-compose.yml            One-service compose
+├── docker/                       supervisord, nginx, start scripts
+├── demo.env.example              Environment template
+├── scripts/
+│   └── fetch-models.sh           HuggingFace artifact bootstrap
+│
+├── TenaOS-Frontend/              React + Vite SPA
+├── TenaOS-Backend/               OpenMRS Ref-App 3 distribution + Tomcat
+├── TenaAgent/                    AI agent service (Python)
+│   ├── service/tena_agent_service/
+│   ├── manifests/                WHO SMART DAK manifests
+│   ├── sources/                  WHO SMART submodules
+│   └── evals/                    In-repo eval harnesses
+├── TenaOS-LLM/                   llama.cpp CUDA prebuild + Dockerfile
+├── TenaOS-KnowledgeBase/         Qdrant + EmbedGemma daemon
+├── TenaOS-CIEL/                  CIEL SQLite + FTS5
+└── models/                       Bind-mounted GGUF weights (gitignored)
+```
 
-See [PHASE1_VALIDATION.md](PHASE1_VALIDATION.md) for the current pass/fail
-matrix per workflow.
+Each top-level component has its own `README.md` following the same
+**Purpose / Build / Run / Test / Environment** shape.
 
-## Security disclosure
+---
 
-If you find a vulnerability, please email security@tenaos.example (replace
-with your operational address) before opening an issue. Do not commit real
-patient data, secrets, or credentials at any point.
+## Why this design
+
+| Decision | Why |
+|---|---|
+| **One Docker image, not seven** | LMIC operators get a single artifact and a single command. No multi-service orchestration to learn. |
+| **`llama.cpp` over vLLM** | Smaller GPU footprint (~15 GB vs ~68 GB for BF16 Gemma 4), native audio multimodal projector, simpler operational story. |
+| **BF16 over quantization** | We tested both. BF16 wins on long-context tool-calling reliability with negligible latency overhead on Ampere. |
+| **`TenaAgent proposes / middleware verifies / human approves`** | Deterministic verification layer between the model and OpenMRS writes. No clinical action is ever model-only. |
+| **OpenMRS Reference Application 3** | The international LMIC EMR standard. Hundreds of clinics already trained on it. |
+| **CIEL terminology, not SNOMED** | LMIC-appropriate license, designed for OpenMRS, ships with the WHO SMART concept sets out of the box. |
+
+---
+
+## Status
+
+This is a **research and challenge-submission** codebase. It is the live
+software behind [demo.tenaos.com](https://demo.tenaos.com). It is **not**:
+
+- a HIPAA-regulated product,
+- a CE-marked or FDA-cleared medical device,
+- safety-of-life software.
+
+Operators deploying TenaOS in real clinical settings remain responsible for
+local regulatory compliance and clinical risk management. See [`SECURITY.md`](SECURITY.md).
+
+---
+
+## Project docs
+
+| | |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | Versioning history |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [SECURITY.md](SECURITY.md) | Security disclosure policy |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Community standards |
+| [LICENSE](LICENSE) | Apache 2.0 |
+
+---
+
+## Acknowledgments
+
+TenaOS stands on the shoulders of:
+
+- **[OpenMRS](https://openmrs.org/)** community for the Reference Application 3 distribution.
+- **Google** for [Gemma 4](https://ai.google.dev/gemma) and [EmbedGemma](https://huggingface.co/google/embeddinggemma-300m).
+- **[Georg Brand & contributors](https://github.com/ggerganov/llama.cpp)** for `llama.cpp`.
+- **[Qdrant](https://qdrant.tech/)** for the vector store.
+- **[WHO SMART Guidelines](https://www.who.int/teams/digital-health-and-innovation/smart-guidelines)** and **[Médecins Sans Frontières](https://medicalguidelines.msf.org/)** for the clinical knowledge corpora.
+- **[CIEL](https://openconceptlab.org/orgs/CIEL)** for the LMIC-appropriate terminology.
+
+---
+
+<div align="center">
+
+**TenaOS** — *primary care, AI-native, where it's needed most.*
+
+</div>

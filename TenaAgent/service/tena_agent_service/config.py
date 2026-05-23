@@ -1,0 +1,165 @@
+"""TenaAgent runtime configuration.
+
+All environment variables follow one of two namespaces:
+
+- ``TENAOS_*``      shared with the rest of TenaOS (LLM endpoint, KB URLs, CIEL paths)
+- ``TENA_AGENT_*``  TenaAgent-internal service settings (port, CORS, tuning constants)
+
+Legacy CDS_*, VLLM_*, KB_GUIDELINES_URL aliases have been removed in the
+public release. See CHANGELOG for the rename map if you are upgrading.
+"""
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def _default_tena_agent_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _default_tenaos_root() -> Path:
+    return _default_tena_agent_root().parent
+
+
+def _cors_origins_from_env() -> frozenset[str]:
+    raw = os.getenv("TENA_AGENT_CORS_ORIGINS") or "http://localhost:3000,http://localhost:5173"
+    return frozenset(o.strip() for o in raw.split(",") if o.strip())
+
+
+@dataclass(frozen=True)
+class Settings:
+    agent_root: Path
+    host: str
+    port: int
+    openmrs_rest_base_url: str
+    openmrs_fhir_base_url: str
+    # TenaOS-LLM (llama.cpp serving Gemma 4 E4B BF16 GGUF)
+    llm_base_url: str
+    llm_model: str
+    llm_api_key: str
+    # TenaAgent core
+    runtime_dir: Path
+    request_timeout_seconds: float
+    # SQLite stores
+    drafts_db_path: Path
+    cds_traces_db_path: Path
+    material_traces_db_path: Path
+    scribe_traces_db_path: Path
+    # CIEL terminology store (raw SQLite + FTS5 — TenaOS-CIEL service)
+    ciel_repo_root: Path
+    ciel_sqlite_path: Path
+    # Knowledge base services (Qdrant-backed semantic search, EmbedGemma)
+    kb_guidelines_url: str
+    kb_ciel_url: str
+    # OpenMRS metadata UUIDs (override per deployment if you use non-reference seeds)
+    clinical_note_encounter_type_uuid: str | None
+    clinical_note_concept_uuid: str | None
+    soap_note_form_uuid: str | None
+    soap_subjective_concept_uuid: str | None
+    soap_objective_concept_uuid: str | None
+    soap_assessment_concept_uuid: str | None
+    soap_plan_concept_uuid: str | None
+    openmrs_service_user: str = "admin"
+    openmrs_service_password: str = "Admin123"
+
+    cors_allowed_origins: frozenset[str] = field(default_factory=frozenset)
+
+    # ---- agent tuning constants (override via env for ops experiments) ----
+    form_agent_max_steps: int = 35
+    form_agent_target_min_fields: int = 6
+    form_agent_max_nudges: int = 2
+    form_agent_brainstorm_max_tokens: int = 1400
+    form_agent_tool_max_tokens: int = 900
+    report_agent_max_steps: int = 25
+    report_agent_brainstorm_max_tokens: int = 1100
+    report_agent_tool_max_tokens: int = 900
+    fhir_obs_page_size: int = 200
+    fhir_obs_max_pages: int = 25
+    fhir_demographics_chunk: int = 50
+    cohort_max_patients: int = 500
+    # When True, agent_prompts.load_prompt() and tool_descriptions_registry()
+    # prefer optimized/ overlay files when present. Production stays False
+    # unless explicitly opted-in.
+    use_optimized_prompts: bool = False
+
+    @classmethod
+    def from_env(cls) -> "Settings":
+        agent_root = Path(os.getenv("TENA_AGENT_ROOT") or _default_tena_agent_root()).resolve()
+        runtime_dir = Path(os.getenv("TENA_AGENT_RUNTIME_DIR") or agent_root / "runtime").resolve()
+        ciel_repo_root = Path(
+            os.getenv("TENAOS_CIEL_ROOT") or _default_tenaos_root() / "TenaOS-CIEL"
+        ).resolve()
+        ciel_sqlite_default = ciel_repo_root / "ciel_search.sqlite3"
+        return cls(
+            agent_root=agent_root,
+            host=os.getenv("TENA_AGENT_SERVICE_HOST", "0.0.0.0"),
+            port=int(os.getenv("TENA_AGENT_SERVICE_PORT", "8095")),
+            openmrs_rest_base_url=os.getenv(
+                "OPENMRS_REST_BASE_URL", "http://localhost:18080/openmrs/ws/rest/v1"
+            ).rstrip("/"),
+            openmrs_fhir_base_url=os.getenv(
+                "OPENMRS_FHIR_BASE_URL", "http://localhost:18080/openmrs/ws/fhir2/R4"
+            ).rstrip("/"),
+            llm_base_url=os.getenv("TENAOS_LLM_URL", "http://localhost:8001/v1").rstrip("/"),
+            llm_model=os.getenv("TENAOS_LLM_MODEL", "gemma-4"),
+            llm_api_key=os.getenv("TENAOS_LLM_API_KEY", "EMPTY"),
+            runtime_dir=runtime_dir,
+            request_timeout_seconds=float(os.getenv("TENA_AGENT_REQUEST_TIMEOUT_SECONDS", "20")),
+            drafts_db_path=Path(
+                os.getenv("TENA_AGENT_DRAFTS_DB") or runtime_dir / "form_drafts.sqlite3"
+            ).resolve(),
+            cds_traces_db_path=Path(
+                os.getenv("TENA_AGENT_CDS_TRACES_DB") or runtime_dir / "cds_traces.sqlite3"
+            ).resolve(),
+            material_traces_db_path=Path(
+                os.getenv("TENA_AGENT_MATERIAL_TRACES_DB") or runtime_dir / "material_traces.sqlite3"
+            ).resolve(),
+            scribe_traces_db_path=Path(
+                os.getenv("TENA_AGENT_SCRIBE_TRACES_DB") or runtime_dir / "scribe_traces.sqlite3"
+            ).resolve(),
+            ciel_repo_root=ciel_repo_root,
+            ciel_sqlite_path=Path(
+                os.getenv("TENAOS_CIEL_SQLITE") or ciel_sqlite_default
+            ).resolve(),
+            kb_guidelines_url=os.getenv("TENAOS_KB_GUIDELINES_URL", "http://localhost:4276"),
+            kb_ciel_url=os.getenv("TENAOS_KB_CIEL_URL", "http://localhost:4277"),
+            # OpenMRS metadata UUIDs match the contract in
+            # TenaOS-Backend/metadata/required-openmrs-metadata.json so the
+            # scribe confirm endpoint works out-of-the-box with the reference
+            # OpenMRS image. Override via env vars for non-standard deployments.
+            clinical_note_encounter_type_uuid=os.getenv("CLINICAL_NOTE_ENCOUNTER_TYPE_UUID")
+            or "d7151f82-c1f3-4152-a605-2f9ea7414a79",
+            clinical_note_concept_uuid=os.getenv("CLINICAL_NOTE_CONCEPT_UUID")
+            or "162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            soap_note_form_uuid=os.getenv("SOAP_NOTE_FORM_UUID")
+            or "289417aa-31d5-3a06-bae8-a22d870bcf1d",
+            soap_subjective_concept_uuid=os.getenv("SOAP_SUBJECTIVE_CONCEPT_UUID")
+            or "81a60a0dbc0c478caa714d372ac533d5",
+            soap_objective_concept_uuid=os.getenv("SOAP_OBJECTIVE_CONCEPT_UUID")
+            or "aeec913c-9a36-4153-9a44-12bc255d7f60",
+            soap_assessment_concept_uuid=os.getenv("SOAP_ASSESSMENT_CONCEPT_UUID")
+            or "13f82aece2cd4e3bbb950140e6cbffce",
+            soap_plan_concept_uuid=os.getenv("SOAP_PLAN_CONCEPT_UUID")
+            or "2ad20b043cf54dd48e698e1c8e231c99",
+            openmrs_service_user=os.getenv("OPENMRS_SERVICE_USER", "admin"),
+            openmrs_service_password=os.getenv("OPENMRS_SERVICE_PASSWORD", "Admin123"),
+            cors_allowed_origins=_cors_origins_from_env(),
+            form_agent_max_steps=int(os.getenv("FORM_AGENT_MAX_STEPS", "35")),
+            form_agent_target_min_fields=int(os.getenv("FORM_AGENT_TARGET_MIN_FIELDS", "6")),
+            form_agent_max_nudges=int(os.getenv("FORM_AGENT_MAX_NUDGES", "2")),
+            form_agent_brainstorm_max_tokens=int(os.getenv("FORM_AGENT_BRAINSTORM_MAX_TOKENS", "1400")),
+            form_agent_tool_max_tokens=int(os.getenv("FORM_AGENT_TOOL_MAX_TOKENS", "900")),
+            report_agent_max_steps=int(os.getenv("REPORT_AGENT_MAX_STEPS", "25")),
+            report_agent_brainstorm_max_tokens=int(os.getenv("REPORT_AGENT_BRAINSTORM_MAX_TOKENS", "1100")),
+            report_agent_tool_max_tokens=int(os.getenv("REPORT_AGENT_TOOL_MAX_TOKENS", "900")),
+            fhir_obs_page_size=int(os.getenv("FHIR_OBS_PAGE_SIZE", "200")),
+            fhir_obs_max_pages=int(os.getenv("FHIR_OBS_MAX_PAGES", "25")),
+            fhir_demographics_chunk=int(os.getenv("FHIR_DEMOGRAPHICS_CHUNK", "50")),
+            cohort_max_patients=int(os.getenv("COHORT_MAX_PATIENTS", "500")),
+            use_optimized_prompts=(
+                os.getenv("TENAOS_USE_OPTIMIZED_PROMPTS", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            ),
+        )

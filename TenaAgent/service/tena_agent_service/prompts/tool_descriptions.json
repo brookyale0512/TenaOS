@@ -1,0 +1,607 @@
+{
+  "schemaVersion": 1,
+  "notes": [
+    "Snapshot of every tool description the agent loops expose to the model.",
+    "Each (workflow, toolName) maps to the description string + parameter schema as of extraction time.",
+    "Phase 1 GEPA optimizes the description fields here; the loops continue to use their inline copies until the GEPA-optimized values are wired back in."
+  ],
+  "workflows": {
+    "cds": {
+      "search_guidelines": {
+        "description": "Search the WHO/MSF clinical guidelines knowledge base (58,984 chunks from 401 source documents). Returns graded evidence chunks ranked by clinical relevance. Issue ONE call per turn with a focused 3-6 word query, then wait for results before deciding the next query. Cover different aspects across turns: primary condition, treatment, dosing, contraindications, monitoring, special populations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Clinical question or phrase, e.g. 'first-line treatment childhood malaria', 'TB preventive therapy HIV adults dosing'"
+            },
+            "k": {
+              "type": "integer",
+              "description": "Number of results (default 5, max 10)",
+              "default": 5
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "format_cds_result": {
+        "description": "Emit the final structured CDS report after gathering sufficient KB evidence. Write a COMPREHENSIVE, DETAILED 5-section report. Every section must have at least 4 specific, grounded bullet points with citations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "recommendation",
+                "insufficient_data",
+                "no_recommendation"
+              ],
+              "description": "recommendation if \u22651 treatment recommendation found"
+            },
+            "summary": {
+              "type": "string",
+              "description": "One-sentence clinical summary for the card header (max 140 chars)"
+            },
+            "content": {
+              "type": "string",
+              "description": "Full structured CDS report with EXACTLY 5 sections using ## headings. Each section MUST have at least 4 specific bullet points grounded in KB evidence.\n\n## Clinical Assessment\n[Patient presentation: age/sex, primary diagnosis, key vitals and flags, ALL active medications with doses, relevant history, current treatment status, what is NOT yet addressed \u2014 at least 4 detailed bullets]\n\n## Evidence-Based Considerations\n[Diagnosis (primary + differential), severity classification and criteria, pathophysiology relevant to management, special population factors (pregnancy/HIV/TB/paediatric/elderly), comorbidity interactions \u2014 at least 4 bullets, each with *(WHO/MSF: ...)* citation]\n\n## Suggested Actions\n[ALL treatment steps in priority order: immediate actions, drug name + EXACT dose + route + frequency + duration for EACH medication, investigations/workup with specific tests, monitoring parameters and frequency, referral criteria and destination \u2014 at least 6 bullets with citations]\n\n## Safety Alerts\n[Drug interactions, contraindications, dose adjustments for renal/hepatic/pregnancy, specific toxicity monitoring, traditional remedy interactions, high-risk populations warnings \u2014 at least 4 bullets with citations]\n\n## Key Points\n[Numbered list of the most critical clinical decisions and takeaways \u2014 at least 4 numbered items with citations]"
+            }
+          },
+          "required": [
+            "status",
+            "summary",
+            "content"
+          ]
+        }
+      }
+    },
+    "cds_search_only": {
+      "search_guidelines": {
+        "description": "Search the WHO/MSF clinical guidelines knowledge base (58,984 chunks from 401 source documents). Returns graded evidence chunks ranked by clinical relevance. Issue ONE call per turn with a focused 3-6 word query, then wait for results before deciding the next query. Cover different aspects across turns: primary condition, treatment, dosing, contraindications, monitoring, special populations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Clinical question or phrase, e.g. 'first-line treatment childhood malaria', 'TB preventive therapy HIV adults dosing'"
+            },
+            "k": {
+              "type": "integer",
+              "description": "Number of results (default 5, max 10)",
+              "default": 5
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    },
+    "material": {
+      "search_guidelines": {
+        "description": "Search the WHO/MSF clinical guidelines knowledge base for information about a condition or treatment. Call multiple times with different queries to gather enough information for patient education.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Short specific query (3-7 words). Use condition + aspect, e.g. 'TB treatment completion importance', 'HIV ARV adherence side effects', 'hypertension pregnancy risk'"
+            },
+            "k": {
+              "type": "integer",
+              "description": "Number of results (default 7, max 10)",
+              "default": 7
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "format_patient_material": {
+        "description": "Emit the final patient education material after gathering sufficient evidence from at least 4 search queries. Call this exactly once when all 7 sections can be filled with specific, grounded content.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Short title for the patient material e.g. 'Understanding Your Hypertension'"
+            },
+            "content": {
+              "type": "string",
+              "description": "Full patient education material with EXACTLY 7 sections using ## headings. Each section MUST have at least 4 bullet points of specific, actionable content.\n\n## What You Have\n[What the condition is, what causes it, what is happening in the body \u2014 in simple words]\n\n## Why It Matters\n[What happens if untreated or if medications are skipped \u2014 specific consequences, not vague]\n\n## What To Do\n[Numbered list of specific daily actions: diet, exercise, habits, checks, fluid intake]\n\n## Your Medications\n[For EACH medication: name, what it does in plain language, exact dose, timing, with/without food, how long to take, what to do if you miss a dose]\n\n## What to Avoid\n[Specific foods, drinks, substances, activities to avoid \u2014 with reasons. Include drug-food interactions. Mention traditional remedies that interfere.]\n\n## Follow-Up Schedule\n[When to return to the clinic, what will be checked, what to bring, how often for tests or measurements]\n\n## When To Seek Help\n[Bulleted list of specific warning signs that require urgent clinic visit or hospital]"
+            }
+          },
+          "required": [
+            "title",
+            "content"
+          ]
+        }
+      }
+    },
+    "scribe": {
+      "search_ciel_concepts": {
+        "description": "Search CIEL for diagnosis, observation, or medication candidates. Use this before finalizing coded diagnoses or medications.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "diagnosis",
+                "observation",
+                "medication"
+              ]
+            },
+            "conceptClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "datatypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "default": 8
+            }
+          },
+          "required": [
+            "query",
+            "kind"
+          ]
+        }
+      },
+      "expand_ciel_concept": {
+        "description": "Inspect one CIEL concept bundle before accepting or rejecting it.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "conceptId": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer",
+              "default": 2
+            }
+          },
+          "required": [
+            "conceptId"
+          ]
+        }
+      },
+      "finalize_soap_note": {
+        "description": "Emit the final SOAP note and extracted items after CIEL searches have been reviewed. Call exactly once when ready.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "soap": {
+              "type": "object",
+              "properties": {
+                "subjective": {
+                  "type": "string"
+                },
+                "objective": {
+                  "type": "string"
+                },
+                "assessment": {
+                  "type": "string"
+                },
+                "plan": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "subjective",
+                "objective",
+                "assessment",
+                "plan"
+              ]
+            },
+            "concepts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "ciel_hint": {
+                    "type": "string"
+                  },
+                  "conceptId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label"
+                ]
+              }
+            },
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "ciel_hint": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "conceptId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label",
+                  "value"
+                ]
+              }
+            },
+            "medications": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "ciel_hint": {
+                    "type": "string"
+                  },
+                  "dose": {
+                    "type": "string"
+                  },
+                  "frequency": {
+                    "type": "string"
+                  },
+                  "route": {
+                    "type": "string"
+                  },
+                  "conceptId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "label"
+                ]
+              }
+            }
+          },
+          "required": [
+            "soap",
+            "concepts",
+            "observations",
+            "medications"
+          ]
+        }
+      }
+    },
+    "form_builder": {
+      "search_ciel_seeds": {
+        "description": "Search CIEL for candidate concepts for a proposed form question. Gemma should call this repeatedly with refined phrases until it finds an answerable concept or decides to drop the question.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "conceptClasses": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "datatypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "limit": {
+              "type": "integer",
+              "default": 10
+            },
+            "seedLimit": {
+              "type": "integer",
+              "default": 5
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "expand_ciel_concept": {
+        "description": "Inspect a CIEL concept's coded answers or set members before deciding whether it is appropriate for the form.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "conceptId": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer",
+              "default": 2
+            }
+          },
+          "required": [
+            "conceptId"
+          ]
+        }
+      },
+      "get_form_draft": {
+        "description": "Read the current draft basket and schema.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      },
+      "update_form_draft": {
+        "description": "Apply safe structured operations to the draft basket after CIEL concepts have been checked.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string"
+                  },
+                  "sectionId": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "conceptId": {
+                    "type": "string"
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "sectionIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "conceptIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "op"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "draftId",
+            "operations"
+          ]
+        }
+      },
+      "build_form_schema": {
+        "description": "Rebuild and validate the OpenMRS O3 schema from the basket after updates.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      },
+      "publish_form": {
+        "description": "Publish the draft to OpenMRS. Only use after the user explicitly confirms publish.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            },
+            "markPublished": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      }
+    },
+    "report_builder": {
+      "search_ciel_seeds": {
+        "description": "Search CIEL for candidate concepts. Refine until you find a Question/Finding/Test/Boolean/Coded concept that matches the user's filter intent.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      "expand_ciel_concept": {
+        "description": "Inspect a CIEL concept's answers / set members.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "conceptId": {
+              "type": "string"
+            },
+            "depth": {
+              "type": "integer",
+              "default": 2
+            }
+          },
+          "required": [
+            "conceptId"
+          ]
+        }
+      },
+      "get_report_draft": {
+        "description": "Read the current spec and the last compiled query / result.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      },
+      "update_report_draft": {
+        "description": "Apply structured spec mutations (set_report_type, set_date_range, add_filter, remove_filter, set_join_mode, set_denominator, clear_denominator, add_group_by, remove_group_by, set_visualization).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string"
+                  },
+                  "reportType": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "joinMode": {
+                    "type": "string"
+                  },
+                  "conceptId": {
+                    "type": "string"
+                  },
+                  "valueConceptId": {
+                    "type": "string"
+                  },
+                  "valueBool": {
+                    "type": "boolean"
+                  },
+                  "operator": {
+                    "type": "string"
+                  },
+                  "numericThreshold": {
+                    "type": "number"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "filterId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "dimension": {
+                    "type": "string"
+                  },
+                  "template": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "op"
+                ],
+                "additionalProperties": true
+              }
+            }
+          },
+          "required": [
+            "draftId",
+            "operations"
+          ]
+        }
+      },
+      "build_report_query": {
+        "description": "Resolve dates, validate the spec, compile to a FHIR query plan.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      },
+      "run_report": {
+        "description": "Execute the compiled query against OpenMRS FHIR2 and store the result.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "draftId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "draftId"
+          ]
+        }
+      }
+    }
+  }
+}

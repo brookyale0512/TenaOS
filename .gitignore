@@ -1,8 +1,8 @@
 # Dependencies and generated frontend output
 node_modules/
-frontend/node_modules/
+TenaOS-Frontend/node_modules/
 dist/
-frontend/dist/
+TenaOS-Frontend/dist/
 dist-ssr/
 *.tsbuildinfo
 
@@ -13,6 +13,9 @@ dist-ssr/
 *.local
 *.secret
 *.secrets
+*-key.json
+*service-account*.json
+vertex-key.json
 
 # Runtime and database artifacts
 *.sql
@@ -22,8 +25,25 @@ dist-ssr/
 *.sqlite
 *.sqlite3
 runtime-artifacts/
-cds/runtime/
+TenaAgent/runtime/
 backups/
+
+# Model weights and large binary artifacts — fetched from HuggingFace, never committed.
+# See scripts/fetch-models.sh.
+models/*.gguf
+models/*.litertlm
+models/*.safetensors
+*.gguf
+*.litertlm
+*.safetensors
+*.npy
+
+# Build artifacts
+*.zip
+
+# Personal documents
+resume_build/
+*.resume.pdf
 
 # Logs and temporary files
 *.log
@@ -40,3 +60,7 @@ __pycache__/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Vendored upstream binaries — not committed; reconstructed at build time
+# (Dockerfile clones the pinned llama.cpp tag) or fetched via scripts/fetch-models.sh.
+third_party/

@@ -1,1 +1,0 @@
-"""TenaOS CDS middleware service."""

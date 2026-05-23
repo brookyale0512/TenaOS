@@ -1,0 +1,74 @@
+# TenaOS — single-container deployment.
+#
+# One image, one container, everything inside. For LMIC operators who want
+# the absolute simplest deploy story:
+#
+#   cp demo.env.example .env && docker compose up -d
+#
+# Open http://localhost:8080 once OpenMRS finishes its first-boot schema
+# migration (~5–10 min the very first time, ~30 s on subsequent restarts).
+#
+# Bind-mount the bulky artifacts from the host so the image stays small.
+# A future release will fetch these automatically from HuggingFace on
+# first boot (see scripts/fetch-models.sh).
+
+services:
+  tenaos:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tenaos:latest
+    container_name: TenaOS
+    restart: unless-stopped
+    environment:
+      TENAOS_PUBLIC_HOST: ${TENAOS_PUBLIC_HOST:-localhost}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?set OPENMRS_DB_PASSWORD in .env}
+      OPENMRS_ADMIN_PASSWORD: ${OPENMRS_ADMIN_PASSWORD:?set OPENMRS_ADMIN_PASSWORD in .env}
+      OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx1g}
+      OPENMRS_HEALTHCHECK_USERNAME: ${OPENMRS_HEALTHCHECK_USERNAME:-admin}
+      OPENMRS_HEALTHCHECK_PASSWORD: ${OPENMRS_HEALTHCHECK_PASSWORD:-${OPENMRS_ADMIN_PASSWORD}}
+      OPENMRS_SERVICE_USER: ${OPENMRS_SERVICE_USER:-admin}
+      OPENMRS_SERVICE_PASSWORD: ${OPENMRS_SERVICE_PASSWORD:-${OPENMRS_ADMIN_PASSWORD}}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
+    ports:
+      - "${TENAOS_HOST_PORT:-8080}:80"
+    volumes:
+      # ── Bind mounts (host artifacts) ────────────────────────────────
+      - ./models:/models:ro
+      - ${TENAOS_EMBED_MODEL_PATH:?set TENAOS_EMBED_MODEL_PATH to your embedgemma-300m dir}:/opt/tenaos/embedgemma-300m:ro
+      - ${TENAOS_CIEL_SQLITE_PATH:?set TENAOS_CIEL_SQLITE_PATH to your ciel_search.sqlite3}:/opt/tenaos/ciel/ciel_search.sqlite3:ro
+      # ── Persistent state ────────────────────────────────────────────
+      - tenaos-openmrs-data:/opt/openmrs/data
+      - tenaos-mariadb-data:/var/lib/mysql
+      - tenaos-qdrant-data:/qdrant/storage
+      - tenaos-agent-runtime:/opt/tenaos/runtime
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/agent-api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+
+volumes:
+  # Adopt existing populated volumes from the legacy stack so demo data
+  # is preserved. Remove `external: true` for a clean-room deployment.
+  tenaos-openmrs-data:
+    external: true
+    name: clinicdx_lite_openmrs_data
+  tenaos-mariadb-data:
+    external: true
+    name: clinicdx_lite_mariadb_data
+  tenaos-qdrant-data:
+    external: true
+    name: clinicdx_qdrant_data
+  tenaos-agent-runtime:

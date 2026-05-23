@@ -1,0 +1,74 @@
+# Standalone backend dev stack — run OpenMRS + TenaAgent without the
+# frontend, KB services, or local llama.cpp. Useful for backend-only
+# iteration when you already have an external TenaOS-LLM endpoint.
+#
+# Run with:
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Point TENAOS_LLM_URL at a TenaOS-LLM service you control (local or remote).
+
+services:
+  tenaos-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tenaos-backend:latest
+    container_name: TenaOS-Backend
+    restart: unless-stopped
+    environment:
+      TENAOS_PUBLIC_HOST: ${TENAOS_PUBLIC_HOST:-localhost}
+      OPENMRS_PORT: ${OPENMRS_PORT:-18080}
+      OPENMRS_DB_NAME: ${OPENMRS_DB_NAME:-openmrs}
+      OPENMRS_DB_USER: ${OPENMRS_DB_USER:-openmrs}
+      OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:-tenaos_openmrs}
+      OPENMRS_ADMIN_PASSWORD: ${OPENMRS_ADMIN_PASSWORD:-Admin123}
+      OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx1g}
+      OPENMRS_KEYCLOAK_ENABLED: "false"
+      OPENMRS_VERIFY_USERNAME: ${OPENMRS_HEALTHCHECK_USERNAME:-admin}
+      OPENMRS_VERIFY_PASSWORD: ${OPENMRS_HEALTHCHECK_PASSWORD:-${OPENMRS_ADMIN_PASSWORD:-Admin123}}
+    ports:
+      - "${OPENMRS_PORT:-18080}:8080"
+    volumes:
+      - TenaOS-Backend-data:/opt/openmrs/data
+      - TenaOS-MariaDB-data:/var/lib/mysql
+      - ./metadata/openmrs-managed-config:/opt/tenaos/data/emr-os/openmrs-managed-config
+    healthcheck:
+      test: ["CMD", "/opt/tenaos/scripts/verify-lite.sh", "--internal", "--healthcheck"]
+      interval: 30s
+      timeout: 20s
+      retries: 20
+      start_period: 300s
+
+  tenaagent:
+    build:
+      context: ..
+      dockerfile: TenaAgent/service/Dockerfile
+    image: tenaagent:latest
+    container_name: TenaAgent
+    restart: unless-stopped
+    depends_on:
+      - tenaos-backend
+    environment:
+      TENA_AGENT_SERVICE_PORT: 8095
+      OPENMRS_REST_BASE_URL: http://tenaos-backend:8080/openmrs/ws/rest/v1
+      OPENMRS_FHIR_BASE_URL: http://tenaos-backend:8080/openmrs/ws/fhir2/R4
+      TENAOS_LLM_URL: ${TENAOS_LLM_URL:-http://host.docker.internal:8000/v1}
+      TENAOS_LLM_MODEL: ${TENAOS_LLM_MODEL:-gemma-4}
+      CLINICAL_NOTE_ENCOUNTER_TYPE_UUID: ${CLINICAL_NOTE_ENCOUNTER_TYPE_UUID:-d7151f82-c1f3-4152-a605-2f9ea7414a79}
+      CLINICAL_NOTE_CONCEPT_UUID: ${CLINICAL_NOTE_CONCEPT_UUID:-162169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+      TENA_AGENT_CORS_ORIGINS: ${TENA_AGENT_CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${TENA_AGENT_SERVICE_PORT:-8095}:8095"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health', timeout=3)"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  TenaOS-Backend-data:
+  TenaOS-MariaDB-data:
