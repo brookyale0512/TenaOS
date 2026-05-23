@@ -97,16 +97,12 @@ EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 #    Defaults to ./tenaos-bootstrap/. ~20 GB on disk; one-time download.
 bash scripts/fetch-models.sh
 
-# 2. Make Gemma weights visible at ./models/ (where docker-compose
-#    expects them).
-ln -sfn $(pwd)/tenaos-bootstrap/models $(pwd)/models
-
-# 3. Configure secrets + paths.
+# 2. Configure secrets + artifact paths.
 cp demo.env.example .env
-# Edit .env — rotate OPENMRS_*_PASSWORD and confirm the three artifact
-# paths printed by fetch-models.sh.
+# Edit .env — rotate OPENMRS_*_PASSWORD and paste the artifact paths
+# printed by fetch-models.sh, including TENAOS_MODELS_PATH.
 
-# 4. Launch.
+# 3. Launch.
 docker compose up -d
 open http://localhost:8080
 ```

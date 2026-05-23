@@ -35,7 +35,7 @@ services:
       - "${TENAOS_HOST_PORT:-8080}:80"
     volumes:
       # ── Bind mounts (host artifacts) ────────────────────────────────
-      - ./models:/models:ro
+      - ${TENAOS_MODELS_PATH:-./models}:/models:ro
       - ${TENAOS_EMBED_MODEL_PATH:?set TENAOS_EMBED_MODEL_PATH to your embedgemma-300m dir}:/opt/tenaos/embedgemma-300m:ro
       - ${TENAOS_CIEL_SQLITE_PATH:?set TENAOS_CIEL_SQLITE_PATH to your ciel_search.sqlite3}:/opt/tenaos/ciel/ciel_search.sqlite3:ro
       # Qdrant snapshots — restored automatically on first boot by the

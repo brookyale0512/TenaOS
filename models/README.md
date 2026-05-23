@@ -19,11 +19,11 @@ From the repo root:
 
 ```bash
 bash scripts/fetch-models.sh
-ln -sfn $(pwd)/tenaos-bootstrap/models $(pwd)/models
 ```
 
-That fetches both GGUFs into `./tenaos-bootstrap/models/` and symlinks
-this directory at them.
+That fetches both GGUFs into `./tenaos-bootstrap/models/`. Set
+`TENAOS_MODELS_PATH=$(pwd)/tenaos-bootstrap/models` in `.env` so
+Docker Compose bind-mounts that directory at `/models`.
 
 ## Manual download
 
