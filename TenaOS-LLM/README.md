@@ -1,64 +1,47 @@
 # TenaOS-LLM
 
-The inference runtime for TenaOS. A `llama.cpp` CUDA server hosting
-[Gemma 4 E4B Instruct](https://huggingface.co/google/gemma-4-E4B-it) at
-BF16 precision, behind the standard OpenAI `/v1/chat/completions` API.
+The inference runtime inside the TenaOS container. A `llama.cpp` CUDA
+server hosting
+[Gemma 4 E4B Instruct](https://huggingface.co/google/gemma-4-E4B-it)
+at BF16 precision, exposed on container localhost over the standard
+OpenAI `/v1/chat/completions` API.
 
 Only `TenaAgent` talks to this service. The browser never does.
 
-## Purpose
+## Why these choices
 
 | Why llama.cpp | Why BF16 GGUF |
 | --- | --- |
 | Native multimodal projector for Gemma 4 audio input | Full precision; no quantization artifacts |
-| Tiny operational footprint vs. vLLM/TGI | Single ~16 GB file, easy to ship |
+| Tiny operational footprint vs. vLLM/TGI | Single ~16 GB file, easy to bind-mount |
 | OpenAI-compatible HTTP surface | Matches TenaAgent's existing client |
 
-## Build
+## How it ships
 
-The Dockerfile ships a **prebuilt** `llama.cpp` binary tree from
-`third_party/llama.cpp/sm80/`. This is the exact binary that the live
-demo has been running against in production, so the image needs no
-compile step.
+`TenaOS-LLM` does **not** have its own Dockerfile. `llama.cpp` is
+built from a pinned upstream tag inside the top-level
+[`Dockerfile`](../Dockerfile) (multi-stage stage `llama-build`) and
+copied into the final image at `/opt/tenaos/llm/`. To change the
+upstream version, bump `LLAMA_CPP_TAG` and `CMAKE_CUDA_ARCHITECTURES`
+in the top-level Dockerfile.
 
-```bash
-docker build -t tenaos-llm:latest -f TenaOS-LLM/Dockerfile .
-```
+## Runtime layout
 
-The `sm80` build targets **NVIDIA Ampere** (A100, A40, RTX 30xx). For
-other architectures drop the matching prebuild into
-`third_party/llama.cpp/<arch>/` and update the COPY path in the
-Dockerfile:
-
-| GPU family | Compute | Directory name |
-| --- | --- | --- |
-| Ampere (A100, A40, RTX 30xx) | 8.0 / 8.6 | `sm80` |
-| Ada (RTX 4090, L40)         | 8.9       | `sm89` |
-| Hopper (H100, H200)         | 9.0       | `sm90` |
-
-## Run
-
-```bash
-docker run --rm --gpus all \
-  -v $(pwd)/models:/models:ro \
-  -p 8000:8000 \
-  tenaos-llm:latest \
-    -m /models/gemma-4-E4B-it-BF16.gguf \
-    --mmproj /models/mmproj-gemma-4-E4B-it-bf16.gguf \
-    --host 0.0.0.0 --port 8000 \
-    -ngl 99 --ctx-size 0 --jinja --alias gemma-4 --no-webui
-```
-
-## Test
-
-```bash
-curl -fsS http://localhost:8000/v1/models | jq .
-curl -fsS -X POST http://localhost:8000/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"gemma-4","messages":[{"role":"user","content":"hi"}]}'
-```
+| Path inside container | Purpose |
+| --- | --- |
+| `/opt/tenaos/llm/llama-server` | The binary |
+| `/opt/tenaos/llm/lib*.so`      | CUDA runtime libraries (LD_LIBRARY_PATH) |
+| `/models/*.gguf`               | Bind-mounted host weights |
+| `127.0.0.1:8001`               | Listen address (loopback only) |
 
 ## Environment
 
-The container is configured entirely through command-line flags; see
-[`docker-compose.yml`](../docker-compose.yml) for the canonical invocation.
+The supervisord program reads the runtime config from environment
+variables (set in [`docker/start-llama.sh`](../docker/start-llama.sh)):
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TENAOS_LLM_GGUF`    | `/models/gemma-4-E4B-it-BF16.gguf`        | Generation model |
+| `TENAOS_LLM_MMPROJ`  | `/models/mmproj-gemma-4-E4B-it-bf16.gguf` | Audio projector |
+| `TENAOS_LLM_MODEL`   | `gemma-4`                                 | Alias served by the API |
+| `TENAOS_LLM_CTX_SIZE`| `0`                                       | 0 = the model's native ctx |

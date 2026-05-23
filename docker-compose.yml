@@ -60,15 +60,7 @@ services:
       start_period: 300s
 
 volumes:
-  # Adopt existing populated volumes from the legacy stack so demo data
-  # is preserved. Remove `external: true` for a clean-room deployment.
   tenaos-openmrs-data:
-    external: true
-    name: clinicdx_lite_openmrs_data
   tenaos-mariadb-data:
-    external: true
-    name: clinicdx_lite_mariadb_data
   tenaos-qdrant-data:
-    external: true
-    name: clinicdx_qdrant_data
   tenaos-agent-runtime:

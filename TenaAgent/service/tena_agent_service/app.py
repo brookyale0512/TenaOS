@@ -401,14 +401,8 @@ class TenaAgentRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"translatedContent": translated.strip()})
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            logging.getLogger("tenaos.tena_agent.scribe").warning(
-                "OpenMRS rejected SOAP scribe save: status=%s detail=%s", exc.code, detail[:1000]
-            )
-            self._send_json({"error": detail or str(exc)}, HTTPStatus.BAD_GATEWAY)
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            logging.getLogger("tenaos.tena_agent.scribe").warning(
-                "OpenMRS rejected SOAP scribe save: status=%s detail=%s", exc.code, detail[:1000]
+            logging.getLogger("tenaos.tena_agent.translate").warning(
+                "Translate upstream error: status=%s detail=%s", exc.code, detail[:1000]
             )
             self._send_json({"error": detail or str(exc)}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:

@@ -25,7 +25,7 @@ import os as _os
 
 MODEL_PATH = _os.environ.get(
     "EMBEDGEMMA_PATH",
-    "/home/RAZERBLADE/who_cds_pipeline/models/embedgemma-300m",
+    "/opt/tenaos/embedgemma-300m",
 )
 
 # 2048 tokens × 5.33 chars/token × 0.92 safety margin = ~10,000 chars

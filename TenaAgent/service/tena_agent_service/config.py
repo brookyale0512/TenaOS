@@ -62,7 +62,10 @@ class Settings:
     soap_assessment_concept_uuid: str | None
     soap_plan_concept_uuid: str | None
     openmrs_service_user: str = "admin"
-    openmrs_service_password: str = "Admin123"
+    # No default password. Caller must set OPENMRS_SERVICE_PASSWORD in env;
+    # an empty value means OpenMRS auth will fail loudly rather than silently
+    # using a known weak credential.
+    openmrs_service_password: str = ""
 
     cors_allowed_origins: frozenset[str] = field(default_factory=frozenset)
 
@@ -144,7 +147,7 @@ class Settings:
             soap_plan_concept_uuid=os.getenv("SOAP_PLAN_CONCEPT_UUID")
             or "2ad20b043cf54dd48e698e1c8e231c99",
             openmrs_service_user=os.getenv("OPENMRS_SERVICE_USER", "admin"),
-            openmrs_service_password=os.getenv("OPENMRS_SERVICE_PASSWORD", "Admin123"),
+            openmrs_service_password=os.getenv("OPENMRS_SERVICE_PASSWORD", ""),
             cors_allowed_origins=_cors_origins_from_env(),
             form_agent_max_steps=int(os.getenv("FORM_AGENT_MAX_STEPS", "35")),
             form_agent_target_min_fields=int(os.getenv("FORM_AGENT_TARGET_MIN_FIELDS", "6")),

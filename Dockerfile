@@ -60,6 +60,10 @@ FROM nvidia/cuda:12.6.1-runtime-ubuntu24.04
 ARG TENAOS_MYSQL_CONNECTOR_J_URL=https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.jar
 ARG TENAOS_MYSQL_CONNECTOR_J_SHA256=e2a3b2fc726a1ac64e998585db86b30fa8bf3f706195b78bb77c5f99bf877bd9
 ARG QDRANT_VERSION=v1.15.4
+# Pinned upstream SHA-256 of the x86_64-unknown-linux-gnu tarball published at
+#   https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-x86_64-unknown-linux-gnu.tar.gz
+# Update both ARGs together when bumping QDRANT_VERSION.
+ARG QDRANT_SHA256=8d0f3af71b4606581c6d4d943c0763aa7f368a7ee801b2f01e16ab2376e8f363
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC
@@ -117,6 +121,7 @@ RUN chmod +x /opt/tenaos/openmrs-scripts/*.sh /opt/tenaos/openmrs-scripts/lib/*.
 # ── Qdrant ────────────────────────────────────────────────────────────────
 RUN curl -fsSL "https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-x86_64-unknown-linux-gnu.tar.gz" \
         -o /tmp/qdrant.tar.gz && \
+    echo "${QDRANT_SHA256}  /tmp/qdrant.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/qdrant.tar.gz -C /usr/local/bin/ && \
     rm /tmp/qdrant.tar.gz && \
     mkdir -p /qdrant/storage /qdrant/snapshots /qdrant/config
@@ -193,6 +198,8 @@ ENV LD_LIBRARY_PATH=/opt/tenaos/llm:/usr/local/cuda/lib64 \
     TENAOS_CIEL_SQLITE=/opt/tenaos/ciel/ciel_search.sqlite3 \
     EMBEDGEMMA_PATH=/opt/tenaos/embedgemma-300m \
     TENAOS_QDRANT_URL=http://127.0.0.1:6333 \
+    # TenaAgent binds to loopback only. The in-container nginx (also on
+    # localhost) is the single ingress; never expose :8095 to the host.
     TENA_AGENT_SERVICE_HOST=127.0.0.1 \
     TENA_AGENT_SERVICE_PORT=8095 \
     OPENMRS_REST_BASE_URL=http://127.0.0.1:8080/openmrs/ws/rest/v1 \

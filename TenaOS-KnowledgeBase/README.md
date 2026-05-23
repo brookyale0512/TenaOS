@@ -41,6 +41,16 @@ curl -fsS -X POST http://localhost:4276/search \
   -d '{"query": "uncomplicated malaria first-line treatment", "k": 5}'
 ```
 
+## Security boundary
+
+Qdrant has no API key. Inside the single TenaOS image it binds to
+**`127.0.0.1` only** (see [`docker/start-llama.sh`](../docker/start-llama.sh)
+and the supervised `qdrant` process in
+[`docker/supervisord.conf`](../docker/supervisord.conf)) — meaning only
+processes inside the same container can talk to it. Never expose the
+Qdrant port (`6333`) on the host network without first putting an
+authentication proxy in front of it.
+
 ## Environment
 
 | Variable | Default | Purpose |
