@@ -40,12 +40,12 @@ bash scripts/fetch-models.sh
 ```
 
 The bootstrap script pulls the file from
-[`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite).
+[`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite).
 Direct download without the script:
 
 ```bash
 hf download beza4588/tenaos-ciel-search-sqlite \
-  ciel_search.sqlite3 --local-dir ./ciel --repo-type dataset
+  ciel_search.sqlite3 --local-dir ./ciel --repo-type model
 ```
 
 Then set the path in `.env`:

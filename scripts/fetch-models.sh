@@ -15,8 +15,8 @@
 # Override the upstream HuggingFace repos with env vars if you fork the
 # artifacts to your own org:
 #   TENAOS_HF_GEMMA_REPO    (model repo with both GGUF files)
-#   TENAOS_HF_CIEL_REPO     (dataset repo with ciel_search.sqlite3)
-#   TENAOS_HF_QDRANT_REPO   (dataset repo with *.snapshot files)
+#   TENAOS_HF_CIEL_REPO     (model repo with ciel_search.sqlite3)
+#   TENAOS_HF_QDRANT_REPO   (model repo with *.snapshot files)
 #   TENAOS_HF_EMBED_REPO    (EmbedGemma model repo — Google's by default)
 set -euo pipefail
 
@@ -41,9 +41,9 @@ if ! command -v hf >/dev/null; then
 fi
 command -v hf >/dev/null || die "'hf' CLI not on PATH after install; re-source your shell"
 
-# A subset of repos (CIEL SQLite, Qdrant snapshots) may be private/gated
-# while we finalize the public release. Run `hf auth login` first or
-# export HF_TOKEN before this script if you hit a 401 below.
+# Some upstream model repos (Gemma/EmbedGemma) may require accepting model
+# terms. Run `hf auth login` first or export HF_TOKEN before this script if
+# you hit an authorization error below.
 if ! hf auth whoami >/dev/null 2>&1; then
   log "NOTE: not logged into HuggingFace."
   log "      If any download below returns 401, run 'hf auth login' or"
@@ -106,7 +106,7 @@ log "[3/4] CIEL search SQLite (~1.7 GB) from hf.co/$CIEL_REPO"
 if have_file "$CIEL_DIR/ciel_search.sqlite3" 100000000; then
   log "      ciel_search.sqlite3 already present, skipping"
 else
-  hf_download_file "$CIEL_REPO" "ciel_search.sqlite3" "$CIEL_DIR" "dataset"
+  hf_download_file "$CIEL_REPO" "ciel_search.sqlite3" "$CIEL_DIR" "model"
   have_file "$CIEL_DIR/ciel_search.sqlite3" 100000000 \
     || die "ciel_search.sqlite3 missing or suspiciously small after download"
 fi
@@ -117,7 +117,7 @@ for f in who_msf_guidelines.snapshot ciel_concepts.snapshot; do
   if have_file "$SNAPSHOTS_DIR/$f" 10000000; then
     log "      $f already present, skipping"
   else
-    hf_download_file "$QDRANT_REPO" "$f" "$SNAPSHOTS_DIR" "dataset"
+    hf_download_file "$QDRANT_REPO" "$f" "$SNAPSHOTS_DIR" "model"
     have_file "$SNAPSHOTS_DIR/$f" 10000000 \
       || die "$f missing or suspiciously small after download"
   fi
@@ -131,8 +131,6 @@ log "  TENAOS_EMBED_MODEL_PATH=$EMBED_DIR"
 log "  TENAOS_CIEL_SQLITE_PATH=$CIEL_DIR/ciel_search.sqlite3"
 log "  TENAOS_QDRANT_SNAPSHOTS_PATH=$SNAPSHOTS_DIR"
 log ""
-log "Place the GGUF files where docker-compose expects them:"
-log "  ln -sfn $MODELS_DIR <repo>/models"
-log "or copy them into <repo>/models/."
+log "  TENAOS_MODELS_PATH=$MODELS_DIR"
 log ""
 log "Then: docker compose up -d"

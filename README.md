@@ -117,11 +117,11 @@ on first container boot.
 | --- | --- | --- |
 | Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | public |
 | EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | public (Gemma terms) |
-| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite) | private during 0.1 — `hf auth login` required |
-| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/datasets/beza4588/tenaos-qdrant-snapshots) | private during 0.1 — `hf auth login` required |
+| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite) | public model repo |
+| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/beza4588/tenaos-qdrant-snapshots) | public model repo |
 
-If `fetch-models.sh` returns `401` on either dataset repo, run
-`hf auth login` (or `export HF_TOKEN=<your token>`) and re-run the
+If `fetch-models.sh` returns an authorization error for a gated model,
+run `hf auth login` (or `export HF_TOKEN=<your token>`) and re-run the
 script. The script is idempotent.
 
 To self-host the artifacts on your own HuggingFace org, override
