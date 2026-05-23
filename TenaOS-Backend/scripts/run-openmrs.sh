@@ -157,6 +157,30 @@ tenaos_wait_for_first_boot_install() {
   return 1
 }
 
+tenaos_stop_tomcat_processes() {
+  local wrapper_pid="${1:-}"
+  if [ -n "$wrapper_pid" ]; then
+    kill -TERM "$wrapper_pid" 2>/dev/null || true
+    wait "$wrapper_pid" 2>/dev/null || true
+  fi
+  local pids
+  pids="$(pgrep -f 'org.apache.catalina.startup.Bootstrap' || true)"
+  if [ -n "$pids" ]; then
+    echo "Stopping existing Tomcat JVM(s): $pids"
+    kill -TERM $pids 2>/dev/null || true
+    local elapsed=0
+    while [ "$elapsed" -lt 30 ] && pgrep -f 'org.apache.catalina.startup.Bootstrap' >/dev/null 2>&1; do
+      sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    pids="$(pgrep -f 'org.apache.catalina.startup.Bootstrap' || true)"
+    if [ -n "$pids" ]; then
+      echo "Force-stopping Tomcat JVM(s): $pids"
+      kill -KILL $pids 2>/dev/null || true
+    fi
+  fi
+}
+
 tenaos_run_existing_openmrs() {
   echo "Running lightweight OpenMRS restart using existing data directory"
   /openmrs/wait-for-it.sh -t 3600 -h "$OMRS_DB_HOSTNAME" -p "$OMRS_DB_PORT"
@@ -218,8 +242,7 @@ STARTUP_PID=$!
 
 if ! tenaos_wait_for_first_boot_install; then
   echo "OpenMRS first-boot setup failed; forwarding container exit." >&2
-  kill -TERM "$STARTUP_PID" 2>/dev/null || true
-  wait "$STARTUP_PID" || true
+  tenaos_stop_tomcat_processes "$STARTUP_PID"
   exit 1
 fi
 
@@ -227,6 +250,5 @@ fi
 # process can remain on /initialsetup. Restart once into the managed path so
 # REST auth and health checks see the initialized runtime properties.
 touch "$OPENMRS_MANAGED_RESTART_FLAG_FILE"
-kill -TERM "$STARTUP_PID" 2>/dev/null || true
-wait "$STARTUP_PID" || true
+tenaos_stop_tomcat_processes "$STARTUP_PID"
 tenaos_run_existing_openmrs
