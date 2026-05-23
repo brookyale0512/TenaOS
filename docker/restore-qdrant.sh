@@ -7,11 +7,13 @@
 #      matching collection already exists with points > 0.
 #   3. If the collection is empty/missing, POST the snapshot to Qdrant's
 #      upload endpoint.
-#   4. Exit 0 either way; supervisord won't restart this program.
+#   4. Exit non-zero if any expected snapshot failed to restore so the
+#      operator sees the failure instead of silently running with an
+#      empty knowledge base.
 #
 # The snapshot directory is bind-mounted from
 # $TENAOS_QDRANT_SNAPSHOTS_PATH on the host (see docker-compose.yml).
-# If the directory is empty or absent the restore is a no-op.
+# If the directory is empty or absent the restore is a deliberate no-op.
 set -euo pipefail
 
 QDRANT_URL="${TENAOS_QDRANT_URL:-http://127.0.0.1:6333}"
@@ -36,6 +38,8 @@ done
 curl -fsS --max-time 2 "$QDRANT_URL/" >/dev/null \
   || { log "ERROR: Qdrant never became ready"; exit 1; }
 
+FAILED_COLLECTIONS=()
+
 for snap in "$SNAPSHOT_DIR"/*.snapshot; do
   collection="$(basename "$snap" .snapshot)"
 
@@ -51,10 +55,11 @@ for snap in "$SNAPSHOT_DIR"/*.snapshot; do
   fi
 
   log "restoring $collection from $(basename "$snap") ..."
+  # Let curl set Content-Type with the correct multipart boundary itself —
+  # do NOT pass an explicit -H 'Content-Type: multipart/form-data'.
   http=$(
     curl -fsS -o /tmp/restore-$$.out -w "%{http_code}" \
       -X POST "$QDRANT_URL/collections/$collection/snapshots/upload" \
-      -H "Content-Type: multipart/form-data" \
       -F "snapshot=@$snap" \
     || echo 000
   )
@@ -63,8 +68,16 @@ for snap in "$SNAPSHOT_DIR"/*.snapshot; do
   else
     log "  $collection FAILED (HTTP $http):"
     head -c 500 /tmp/restore-$$.out 2>/dev/null && echo
+    FAILED_COLLECTIONS+=("$collection")
   fi
   rm -f /tmp/restore-$$.out
 done
+
+if [ "${#FAILED_COLLECTIONS[@]}" -gt 0 ]; then
+  log "ERROR: failed to restore ${#FAILED_COLLECTIONS[@]} collection(s): ${FAILED_COLLECTIONS[*]}"
+  log "Container is up but the AI agent will return zero-evidence results"
+  log "for those collections. Inspect the log above, fix, then restart."
+  exit 1
+fi
 
 log "restore pass complete"

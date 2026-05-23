@@ -117,12 +117,16 @@ on first container boot.
 
 ### Artifact source repositories
 
-| Artifact | HuggingFace repo |
-| --- | --- |
-| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
-| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) |
-| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite) |
-| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/datasets/beza4588/tenaos-qdrant-snapshots) |
+| Artifact | HuggingFace repo | Visibility |
+| --- | --- | --- |
+| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | public |
+| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | public (Gemma terms) |
+| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite) | private during 0.1 — `hf auth login` required |
+| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/datasets/beza4588/tenaos-qdrant-snapshots) | private during 0.1 — `hf auth login` required |
+
+If `fetch-models.sh` returns `401` on either dataset repo, run
+`hf auth login` (or `export HF_TOKEN=<your token>`) and re-run the
+script. The script is idempotent.
 
 To self-host the artifacts on your own HuggingFace org, override
 `TENAOS_HF_GEMMA_REPO`, `TENAOS_HF_CIEL_REPO`, `TENAOS_HF_QDRANT_REPO`,

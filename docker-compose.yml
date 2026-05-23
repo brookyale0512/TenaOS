@@ -9,8 +9,8 @@
 # migration (~5–10 min the very first time, ~30 s on subsequent restarts).
 #
 # Bind-mount the bulky artifacts from the host so the image stays small.
-# A future release will fetch these automatically from HuggingFace on
-# first boot (see scripts/fetch-models.sh).
+# Run `bash scripts/fetch-models.sh` once to download them from
+# HuggingFace before the first `docker compose up -d`.
 
 services:
   tenaos:

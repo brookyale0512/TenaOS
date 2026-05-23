@@ -41,6 +41,15 @@ if ! command -v hf >/dev/null; then
 fi
 command -v hf >/dev/null || die "'hf' CLI not on PATH after install; re-source your shell"
 
+# A subset of repos (CIEL SQLite, Qdrant snapshots) may be private/gated
+# while we finalize the public release. Run `hf auth login` first or
+# export HF_TOKEN before this script if you hit a 401 below.
+if ! hf auth whoami >/dev/null 2>&1; then
+  log "NOTE: not logged into HuggingFace."
+  log "      If any download below returns 401, run 'hf auth login' or"
+  log "      'export HF_TOKEN=<your token>' and re-run this script."
+fi
+
 # ── Layout ───────────────────────────────────────────────────────────────
 MODELS_DIR="$TARGET/models"
 EMBED_DIR="$TARGET/embedgemma-300m"
