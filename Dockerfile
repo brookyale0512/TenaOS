@@ -29,16 +29,24 @@ ARG TENAOS_OMRS_SOURCE_IMAGE=openmrs/openmrs-reference-application-3-backend:dem
 # ── Stage 1: pull OpenMRS distribution from the upstream image ────────────
 FROM ${TENAOS_OMRS_SOURCE_IMAGE} AS omrs-src
 
-# ── Stage 2: build llama.cpp from a pinned upstream tag ──────────────────
+# ── Stage 2: build llama.cpp from a pinned upstream commit SHA ───────────
+# We pin a commit SHA, not a tag, because ggerganov/llama.cpp publishes
+# rolling tags that are garbage-collected upstream (b6005 — the previous
+# pin — vanished after ~4 weeks). SHAs are immutable.
+#
+# To bump: pick a tag at https://github.com/ggerganov/llama.cpp/releases,
+# resolve it to a commit SHA, and update LLAMA_CPP_REF below.
 FROM nvidia/cuda:12.6.1-devel-ubuntu24.04 AS llama-build
-ARG LLAMA_CPP_TAG=b6005
+ARG LLAMA_CPP_REF=b0df4c0cfd2cda10738056771714a5290dc95454
 ARG CMAKE_CUDA_ARCHITECTURES=80
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git ca-certificates curl libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
-WORKDIR /src
-RUN git clone --depth 1 --branch ${LLAMA_CPP_TAG} https://github.com/ggerganov/llama.cpp.git \
-    && cd llama.cpp \
+WORKDIR /src/llama.cpp
+RUN git init -q . \
+    && git remote add origin https://github.com/ggerganov/llama.cpp.git \
+    && git fetch --depth 1 origin "${LLAMA_CPP_REF}" \
+    && git checkout -q FETCH_HEAD \
     && cmake -B build -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} -DLLAMA_CURL=ON \
     && cmake --build build --config Release --target llama-server -j
 
