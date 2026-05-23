@@ -167,10 +167,12 @@ COPY docker/entrypoint.sh /usr/local/bin/tenaos-entrypoint
 COPY docker/start-llama.sh /usr/local/bin/tenaos-start-llama
 COPY docker/start-tena-agent.sh /usr/local/bin/tenaos-start-tena-agent
 COPY docker/start-kb.sh /usr/local/bin/tenaos-start-kb
+COPY docker/restore-qdrant.sh /usr/local/bin/tenaos-restore-qdrant
 RUN chmod +x /usr/local/bin/tenaos-entrypoint \
               /usr/local/bin/tenaos-start-llama \
               /usr/local/bin/tenaos-start-tena-agent \
-              /usr/local/bin/tenaos-start-kb
+              /usr/local/bin/tenaos-start-kb \
+              /usr/local/bin/tenaos-restore-qdrant
 
 # Users + directories.
 RUN groupadd --system tenaos && \

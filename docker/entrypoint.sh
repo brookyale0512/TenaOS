@@ -33,6 +33,14 @@ if [ ! -f /opt/tenaos/ciel/ciel_search.sqlite3 ]; then
   log "Concept lookup will fall back to limited mode."
 fi
 
+# ── Note about Qdrant snapshots (restored by the qdrant-restore program) ─
+if [ -d /qdrant/snapshots ] && compgen -G '/qdrant/snapshots/*.snapshot' >/dev/null; then
+  log "Qdrant snapshots present at /qdrant/snapshots; restore will run after Qdrant starts."
+else
+  log "NOTE: no Qdrant snapshots mounted at /qdrant/snapshots — KB collections will start empty."
+  log "Fetch with scripts/fetch-models.sh and set TENAOS_QDRANT_SNAPSHOTS_PATH."
+fi
+
 # ── MariaDB first-run bootstrap ──────────────────────────────────────────
 if [ ! -d /var/lib/mysql/mysql ]; then
   log "Initializing MariaDB data directory ..."

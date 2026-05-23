@@ -37,6 +37,7 @@ models/*.safetensors
 *.litertlm
 *.safetensors
 *.npy
+third_party/
 
 # Build artifacts
 *.zip
@@ -60,7 +61,3 @@ __pycache__/
 .idea/
 .vscode/*
 !.vscode/extensions.json
-
-# Vendored upstream binaries — not committed; reconstructed at build time
-# (Dockerfile clones the pinned llama.cpp tag) or fetched via scripts/fetch-models.sh.
-third_party/

@@ -92,18 +92,41 @@ EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 ### Steps
 
 ```bash
+# 1. Fetch every host-side artifact (Gemma 4 GGUF + mmproj, EmbedGemma,
+#    CIEL SQLite, Qdrant snapshots) from the official HuggingFace repos.
+#    Defaults to ./tenaos-bootstrap/. ~20 GB on disk; one-time download.
+bash scripts/fetch-models.sh
+
+# 2. Make Gemma weights visible at ./models/ (where docker-compose
+#    expects them).
+ln -sfn $(pwd)/tenaos-bootstrap/models $(pwd)/models
+
+# 3. Configure secrets + paths.
 cp demo.env.example .env
-# Edit .env: rotate OPENMRS_*_PASSWORD,
-# point TENAOS_EMBED_MODEL_PATH and TENAOS_CIEL_SQLITE_PATH at host files.
+# Edit .env — rotate OPENMRS_*_PASSWORD and confirm the three artifact
+# paths printed by fetch-models.sh.
 
-# Place Gemma 4 weights in ./models/ — see models/README.md.
-
+# 4. Launch.
 docker compose up -d
 open http://localhost:8080
 ```
 
-A future release will fetch the model and knowledge-base artifacts on
-first run — see [`scripts/fetch-models.sh`](scripts/fetch-models.sh).
+The Qdrant knowledge-base collections (`who_msf_guidelines` +
+`ciel_concepts`) restore automatically from the downloaded snapshots
+on first container boot.
+
+### Artifact source repositories
+
+| Artifact | HuggingFace repo |
+| --- | --- |
+| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
+| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) |
+| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite) |
+| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/datasets/beza4588/tenaos-qdrant-snapshots) |
+
+To self-host the artifacts on your own HuggingFace org, override
+`TENAOS_HF_GEMMA_REPO`, `TENAOS_HF_CIEL_REPO`, `TENAOS_HF_QDRANT_REPO`,
+or `TENAOS_HF_EMBED_REPO` before running `fetch-models.sh`.
 
 ## Capabilities
 

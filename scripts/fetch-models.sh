@@ -1,74 +1,129 @@
 #!/usr/bin/env bash
-# TenaOS — first-run model bootstrap.
+# TenaOS — first-run artifact bootstrap.
 #
-# Downloads everything the TenaOS image needs to run, from the official
-# TenaOS HuggingFace organization. Idempotent: skips files that already
-# exist.
+# Downloads every host-side artifact the TenaOS image bind-mounts:
+#   * Gemma 4 E4B BF16 GGUF + mmproj  (~16 GB)
+#   * EmbedGemma 300M                  (~1.2 GB)
+#   * CIEL search SQLite               (~1.7 GB)
+#   * WHO/MSF + CIEL Qdrant snapshots  (~0.8 GB)
+#
+# Idempotent: any artifact that is already present on disk is skipped.
 #
 # Usage:
 #   bash scripts/fetch-models.sh [<target_dir>]
 #
-# Files fetched into <target_dir> (default: ./tenaos-models):
-#   models/gemma-4-E4B-it-BF16.gguf            (~16 GB)
-#   models/mmproj-gemma-4-E4B-it-bf16.gguf     (~0.5 GB)
-#   embedgemma-300m/                            (~1.2 GB)
-#   ciel/ciel_search.sqlite3                    (~1.7 GB)
-#
-# After this completes, point your .env at the downloaded paths:
-#   TENAOS_EMBED_MODEL_PATH=<target_dir>/embedgemma-300m
-#   TENAOS_CIEL_SQLITE_PATH=<target_dir>/ciel/ciel_search.sqlite3
-#
-# Then `docker compose up -d`.
+# Override the upstream HuggingFace repos with env vars if you fork the
+# artifacts to your own org:
+#   TENAOS_HF_GEMMA_REPO    (model repo with both GGUF files)
+#   TENAOS_HF_CIEL_REPO     (dataset repo with ciel_search.sqlite3)
+#   TENAOS_HF_QDRANT_REPO   (dataset repo with *.snapshot files)
+#   TENAOS_HF_EMBED_REPO    (EmbedGemma model repo — Google's by default)
 set -euo pipefail
 
-TARGET="${1:-$(pwd)/tenaos-models}"
-HF_ORG="${TENAOS_HF_ORG:-tenaos}"
-
-# Public release artifacts. Adjust repo names once published.
-GEMMA_REPO="${TENAOS_HF_GEMMA_REPO:-tenaos/gemma-4-E4B-it-gguf}"
+# ── Defaults ──────────────────────────────────────────────────────────────
+TARGET="${1:-$(pwd)/tenaos-bootstrap}"
+GEMMA_REPO="${TENAOS_HF_GEMMA_REPO:-beza4588/TenaOS}"
+CIEL_REPO="${TENAOS_HF_CIEL_REPO:-beza4588/tenaos-ciel-search-sqlite}"
+QDRANT_REPO="${TENAOS_HF_QDRANT_REPO:-beza4588/tenaos-qdrant-snapshots}"
 EMBED_REPO="${TENAOS_HF_EMBED_REPO:-google/embeddinggemma-300m}"
-CIEL_REPO="${TENAOS_HF_CIEL_REPO:-tenaos/ciel-search-sqlite}"
-
-mkdir -p "$TARGET/models" "$TARGET/embedgemma-300m" "$TARGET/ciel"
-
-need() { command -v "$1" >/dev/null || { echo "Missing dependency: $1" >&2; exit 1; }; }
-need curl
-if ! command -v huggingface-cli >/dev/null; then
-  echo "Installing huggingface_hub ..."
-  pip install --user huggingface_hub
-  export PATH="$HOME/.local/bin:$PATH"
-fi
 
 log() { printf '[fetch-models] %s\n' "$*"; }
+die() { printf '[fetch-models] ERROR: %s\n' "$*" >&2; exit 1; }
 
-# ── Gemma 4 BF16 GGUF + multimodal projector ─────────────────────────────
+# ── Tooling ──────────────────────────────────────────────────────────────
+command -v curl >/dev/null || die "missing dependency: curl"
+
+if ! command -v hf >/dev/null; then
+  log "installing huggingface_hub (the 'hf' CLI) ..."
+  python3 -m pip install --user --quiet --upgrade 'huggingface_hub>=1.0' \
+    || die "failed to install huggingface_hub; install it manually and retry"
+  export PATH="$HOME/.local/bin:$PATH"
+fi
+command -v hf >/dev/null || die "'hf' CLI not on PATH after install; re-source your shell"
+
+# ── Layout ───────────────────────────────────────────────────────────────
+MODELS_DIR="$TARGET/models"
+EMBED_DIR="$TARGET/embedgemma-300m"
+CIEL_DIR="$TARGET/ciel"
+SNAPSHOTS_DIR="$TARGET/qdrant-snapshots"
+mkdir -p "$MODELS_DIR" "$EMBED_DIR" "$CIEL_DIR" "$SNAPSHOTS_DIR"
+
+# ── Helpers ──────────────────────────────────────────────────────────────
+have_file() {
+  # have_file <path> [<min_bytes>]
+  local f="$1"
+  local min="${2:-1}"
+  [ -f "$f" ] && [ "$(stat -c %s "$f")" -ge "$min" ]
+}
+
+hf_download_file() {
+  # hf_download_file <repo> <filename> <local_dir> [<repo_type>]
+  local repo="$1" filename="$2" dest_dir="$3" repo_type="${4:-model}"
+  log "  -> hf download $repo $filename ($repo_type) -> $dest_dir"
+  hf download "$repo" "$filename" --local-dir "$dest_dir" --repo-type "$repo_type" >/dev/null
+}
+
+hf_download_dir() {
+  # hf_download_dir <repo> <local_dir> [<repo_type>]
+  local repo="$1" dest_dir="$2" repo_type="${3:-model}"
+  log "  -> hf download $repo ($repo_type) -> $dest_dir"
+  hf download "$repo" --local-dir "$dest_dir" --repo-type "$repo_type" >/dev/null
+}
+
+# ── 1. Gemma 4 BF16 GGUF + mmproj projector ──────────────────────────────
+log "[1/4] Gemma 4 E4B BF16 GGUF (~16 GB) from hf.co/$GEMMA_REPO"
 for f in gemma-4-E4B-it-BF16.gguf mmproj-gemma-4-E4B-it-bf16.gguf; do
-  if [ ! -f "$TARGET/models/$f" ]; then
-    log "Downloading $f from hf.co/$GEMMA_REPO ..."
-    huggingface-cli download "$GEMMA_REPO" "$f" --local-dir "$TARGET/models"
+  if have_file "$MODELS_DIR/$f" 1000000; then
+    log "      $f already present, skipping"
   else
-    log "Skipping $f (already present)"
+    hf_download_file "$GEMMA_REPO" "$f" "$MODELS_DIR" "model"
+    have_file "$MODELS_DIR/$f" 1000000 \
+      || die "download produced no/empty file: $MODELS_DIR/$f"
   fi
 done
 
-# ── EmbedGemma 300M ──────────────────────────────────────────────────────
-if [ ! -f "$TARGET/embedgemma-300m/config.json" ]; then
-  log "Downloading EmbedGemma 300M from hf.co/$EMBED_REPO ..."
-  huggingface-cli download "$EMBED_REPO" --local-dir "$TARGET/embedgemma-300m"
+# ── 2. EmbedGemma 300M ────────────────────────────────────────────────────
+log "[2/4] EmbedGemma 300M (~1.2 GB) from hf.co/$EMBED_REPO"
+if have_file "$EMBED_DIR/config.json" 100; then
+  log "      EmbedGemma already present, skipping"
 else
-  log "Skipping EmbedGemma (already present)"
+  hf_download_dir "$EMBED_REPO" "$EMBED_DIR" "model"
+  have_file "$EMBED_DIR/config.json" 100 \
+    || die "EmbedGemma config.json missing after download"
 fi
 
-# ── CIEL search SQLite ───────────────────────────────────────────────────
-if [ ! -f "$TARGET/ciel/ciel_search.sqlite3" ]; then
-  log "Downloading CIEL search SQLite from hf.co/$CIEL_REPO ..."
-  huggingface-cli download "$CIEL_REPO" ciel_search.sqlite3 --local-dir "$TARGET/ciel"
+# ── 3. CIEL search SQLite ────────────────────────────────────────────────
+log "[3/4] CIEL search SQLite (~1.7 GB) from hf.co/$CIEL_REPO"
+if have_file "$CIEL_DIR/ciel_search.sqlite3" 100000000; then
+  log "      ciel_search.sqlite3 already present, skipping"
 else
-  log "Skipping CIEL SQLite (already present)"
+  hf_download_file "$CIEL_REPO" "ciel_search.sqlite3" "$CIEL_DIR" "dataset"
+  have_file "$CIEL_DIR/ciel_search.sqlite3" 100000000 \
+    || die "ciel_search.sqlite3 missing or suspiciously small after download"
 fi
 
-log "Done."
-log "Update .env:"
-log "  TENAOS_EMBED_MODEL_PATH=$TARGET/embedgemma-300m"
-log "  TENAOS_CIEL_SQLITE_PATH=$TARGET/ciel/ciel_search.sqlite3"
-log "and place the GGUF files alongside the image: ln -sf $TARGET/models <repo>/models"
+# ── 4. Qdrant snapshots (WHO/MSF guidelines + CIEL concepts) ─────────────
+log "[4/4] Qdrant snapshots (~0.8 GB) from hf.co/$QDRANT_REPO"
+for f in who_msf_guidelines.snapshot ciel_concepts.snapshot; do
+  if have_file "$SNAPSHOTS_DIR/$f" 10000000; then
+    log "      $f already present, skipping"
+  else
+    hf_download_file "$QDRANT_REPO" "$f" "$SNAPSHOTS_DIR" "dataset"
+    have_file "$SNAPSHOTS_DIR/$f" 10000000 \
+      || die "$f missing or suspiciously small after download"
+  fi
+done
+
+# ── Done ─────────────────────────────────────────────────────────────────
+log "All artifacts ready under: $TARGET"
+log ""
+log "Set these in your .env (alongside the OPENMRS_*_PASSWORD lines):"
+log "  TENAOS_EMBED_MODEL_PATH=$EMBED_DIR"
+log "  TENAOS_CIEL_SQLITE_PATH=$CIEL_DIR/ciel_search.sqlite3"
+log "  TENAOS_QDRANT_SNAPSHOTS_PATH=$SNAPSHOTS_DIR"
+log ""
+log "Place the GGUF files where docker-compose expects them:"
+log "  ln -sfn $MODELS_DIR <repo>/models"
+log "or copy them into <repo>/models/."
+log ""
+log "Then: docker compose up -d"

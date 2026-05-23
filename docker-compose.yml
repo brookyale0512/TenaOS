@@ -38,6 +38,10 @@ services:
       - ./models:/models:ro
       - ${TENAOS_EMBED_MODEL_PATH:?set TENAOS_EMBED_MODEL_PATH to your embedgemma-300m dir}:/opt/tenaos/embedgemma-300m:ro
       - ${TENAOS_CIEL_SQLITE_PATH:?set TENAOS_CIEL_SQLITE_PATH to your ciel_search.sqlite3}:/opt/tenaos/ciel/ciel_search.sqlite3:ro
+      # Qdrant snapshots — restored automatically on first boot by the
+      # supervised `qdrant-restore` program. Leave the directory empty
+      # if you want to start with no preloaded knowledge base.
+      - ${TENAOS_QDRANT_SNAPSHOTS_PATH:?set TENAOS_QDRANT_SNAPSHOTS_PATH to your qdrant-snapshots dir}:/qdrant/snapshots:ro
       # ── Persistent state ────────────────────────────────────────────
       - tenaos-openmrs-data:/opt/openmrs/data
       - tenaos-mariadb-data:/var/lib/mysql

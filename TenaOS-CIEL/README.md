@@ -29,15 +29,35 @@ TenaOS-CIEL/
 
 ## Runtime artifact (host-mounted, gitignored)
 
-The 1.7 GB `ciel_search.sqlite3` file is **not** committed. Point
-TenaAgent at it via:
+The ~1.7 GB `ciel_search.sqlite3` file is **not** committed. There are
+two ways to get it.
+
+### Easiest: fetch the prebuilt SQLite from HuggingFace
 
 ```bash
-export TENAOS_CIEL_ROOT=/var/www/TenaOS/TenaOS-CIEL
-export TENAOS_CIEL_SQLITE=$TENAOS_CIEL_ROOT/ciel_search.sqlite3
+bash scripts/fetch-models.sh
+# downloads to ./tenaos-bootstrap/ciel/ciel_search.sqlite3
 ```
 
-## Build the SQLite from an OCL export
+The bootstrap script pulls the file from
+[`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/datasets/beza4588/tenaos-ciel-search-sqlite).
+Direct download without the script:
+
+```bash
+hf download beza4588/tenaos-ciel-search-sqlite \
+  ciel_search.sqlite3 --local-dir ./ciel --repo-type dataset
+```
+
+Then set the path in `.env`:
+
+```bash
+TENAOS_CIEL_SQLITE_PATH=$(pwd)/ciel/ciel_search.sqlite3
+```
+
+### Build from an OpenConceptLab export
+
+If you need a newer CIEL release or want to verify the pipeline, build
+the SQLite locally from a fresh OCL export:
 
 ```bash
 python3 -m ciel_search.pipeline --export /path/to/ciel_export.json --out ./ciel_search.sqlite3
