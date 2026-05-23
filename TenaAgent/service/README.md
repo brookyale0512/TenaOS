@@ -27,8 +27,15 @@ Python service that owns every LLM-mediated workflow in TenaOS. See
 pip install -r requirements.txt
 TENAOS_LLM_URL=http://localhost:8001/v1 \
 TENAOS_CIEL_ROOT=/var/www/TenaOS/TenaOS-CIEL \
+TENA_AGENT_SERVICE_HOST=127.0.0.1 \
 python main.py
 ```
+
+Direct TenaAgent access is intended for local development only.
+TenaAgent does not yet provide its own API authentication layer, so do
+not publish port `8095` to untrusted networks. Production all-in-one
+deployments keep TenaAgent behind nginx and expose it only through
+`/agent-api`.
 
 ## Test
 

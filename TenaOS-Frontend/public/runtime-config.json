@@ -1,10 +1,10 @@
 {
   "$schema": "Optional runtime overrides served by nginx. Each key matches a VITE_* default and wins over the build-time value. Edit per-deployment without rebuilding the image.",
   "openmrsBaseUrl": null,
-  "patientListQuery": null,
-  "activeVisitMaxAgeHours": null,
+  "patientListQuery": "100",
+  "activeVisitMaxAgeHours": 24,
   "capabilities": {
-    "queues": null,
+    "queues": true,
     "appointments": null
   },
   "metadata": {

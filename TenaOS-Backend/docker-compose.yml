@@ -23,7 +23,7 @@ services:
       OPENMRS_DB_USER: ${OPENMRS_DB_USER:-openmrs}
       OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?set OPENMRS_DB_PASSWORD in .env}
       OPENMRS_ADMIN_PASSWORD: ${OPENMRS_ADMIN_PASSWORD:?set OPENMRS_ADMIN_PASSWORD in .env}
-      OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx1g}
+      OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx4g}
       OPENMRS_KEYCLOAK_ENABLED: "false"
       OPENMRS_VERIFY_USERNAME: ${OPENMRS_HEALTHCHECK_USERNAME:-admin}
       OPENMRS_VERIFY_PASSWORD: ${OPENMRS_HEALTHCHECK_PASSWORD:-${OPENMRS_ADMIN_PASSWORD}}
@@ -61,7 +61,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "${TENA_AGENT_SERVICE_PORT:-8095}:8095"
+      # TenaAgent has no standalone API auth layer yet. Keep direct access
+      # local-only; other containers still reach it over the Docker network.
+      - "127.0.0.1:${TENA_AGENT_SERVICE_PORT:-8095}:8095"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8095/health', timeout=3)"]
       interval: 30s

@@ -3,7 +3,7 @@
 
   "openmrsBaseUrl": "/openmrs",
 
-  "patientListQuery": "",
+  "patientListQuery": "100",
 
   "activeVisitMaxAgeHours": 24,
 

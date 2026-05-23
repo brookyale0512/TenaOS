@@ -43,11 +43,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake git ca-certificates curl libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src/llama.cpp
-RUN git init -q . \
+RUN ln -sfn /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 \
+    && git init -q . \
     && git remote add origin https://github.com/ggerganov/llama.cpp.git \
     && git fetch --depth 1 origin "${LLAMA_CPP_REF}" \
     && git checkout -q FETCH_HEAD \
     && cmake -B build -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=${CMAKE_CUDA_ARCHITECTURES} -DLLAMA_CURL=ON \
+        -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
     && cmake --build build --config Release --target llama-server -j
 
 # ── Stage 3: build the frontend SPA ───────────────────────────────────────
@@ -114,6 +116,16 @@ RUN if [ -f /opt/openmrs/distribution/openmrs_config/addresshierarchy/referencea
     python3 /tmp/patch-openmrs-webservices.py && \
     rm -f /tmp/patch-openmrs-log4j.py /tmp/patch-openmrs-webservices.py
 
+# The upstream demo distribution includes referencedemodata. On a fresh
+# all-in-one boot its startup activator generates visits/encounters before
+# REST is ready and can monopolize OpenMRS startup. Keep the module available
+# for operators to re-enable manually, but do not start it by default.
+RUN mkdir -p /opt/openmrs/distribution/openmrs_modules.disabled && \
+    if [ -f /opt/openmrs/distribution/openmrs_modules/referencedemodata-2.6.1.omod ]; then \
+      mv /opt/openmrs/distribution/openmrs_modules/referencedemodata-2.6.1.omod \
+         /opt/openmrs/distribution/openmrs_modules.disabled/; \
+    fi
+
 RUN chmod +x /opt/openmrs/startup-init.sh /opt/openmrs/startup.sh /opt/openmrs/wait-for-it.sh && \
     ln -sfn /opt/tomcat-openmrs /usr/local/tomcat && \
     ln -sfn /opt/openmrs /openmrs
@@ -145,9 +157,9 @@ RUN printf '%s\n' \
     '  grpc_port: 6334' \
     > /qdrant/config/config.yaml
 
-# ── llama.cpp (compiled in stage 2 from pinned upstream tag) ──────────────
+# ── llama.cpp (compiled in stage 2 from pinned upstream commit) ───────────
 COPY --from=llama-build /src/llama.cpp/build/bin/llama-server /opt/tenaos/llm/llama-server
-COPY --from=llama-build /src/llama.cpp/build/bin/lib*.so      /opt/tenaos/llm/
+COPY --from=llama-build /src/llama.cpp/build/bin/lib*.so*     /opt/tenaos/llm/
 
 # ── Python application code + dependencies ───────────────────────────────
 COPY TenaAgent/service/requirements.txt /tmp/tena-agent-requirements.txt

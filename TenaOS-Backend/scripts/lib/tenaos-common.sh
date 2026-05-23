@@ -21,7 +21,7 @@ tenaos_apply_defaults() {
   tenaos_default_env TENAOS_PUBLIC_HOST "localhost"
   tenaos_default_env OPENMRS_DB_NAME "openmrs"
   tenaos_default_env OPENMRS_DB_USER "openmrs"
-  tenaos_default_env OPENMRS_JAVA_MEMORY_OPTS "-Xmx1g"
+  tenaos_default_env OPENMRS_JAVA_MEMORY_OPTS "-Xmx4g"
   tenaos_default_env OPENMRS_KEYCLOAK_ENABLED "false"
 }
 

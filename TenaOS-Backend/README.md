@@ -1,7 +1,8 @@
 # TenaOS-Backend
 
 OpenMRS Reference Application 3 + MariaDB packaged as a single Docker
-image, supervised so TenaAgent and the SPA can talk to one endpoint.
+image. In the production all-in-one image, nginx is the only public
+ingress and reverse-proxies both OpenMRS and TenaAgent.
 
 ## Purpose
 
@@ -16,7 +17,12 @@ image, supervised so TenaAgent and the SPA can talk to one endpoint.
 docker build -t tenaos-backend:latest -f TenaOS-Backend/Dockerfile TenaOS-Backend
 ```
 
-## Run (standalone, for backend-only iteration)
+## Run (standalone local development only)
+
+The `docker-compose.yml` in this directory is a local/backend
+development stack for running OpenMRS with TenaAgent while you point at
+an external `TenaOS-LLM` endpoint. It is not a production deployment
+topology.
 
 ```bash
 cd TenaOS-Backend
@@ -25,6 +31,25 @@ docker compose up -d
 ```
 
 OpenMRS lives at `http://localhost:18080/openmrs/`.
+
+TenaAgent is available locally at `http://127.0.0.1:8095/` by default.
+The compose file binds this port to loopback only:
+
+```yaml
+ports:
+  - "127.0.0.1:${TENA_AGENT_SERVICE_PORT:-8095}:8095"
+```
+
+Do not expose TenaAgent directly to untrusted networks until it has its
+own API authentication layer. If you need to test from the same machine,
+use the loopback URL above. Inter-container communication is unaffected:
+OpenMRS and TenaAgent continue to reach each other over the Docker
+network.
+
+For production-style deployments, use the all-in-one image from the
+repository root. In that image, TenaAgent binds to container loopback and
+nginx is the only ingress via `/agent-api`; host port `8095` should not
+be published.
 
 ## Test
 
@@ -39,7 +64,7 @@ OpenMRS lives at `http://localhost:18080/openmrs/`.
 | `OPENMRS_DB_PASSWORD`        | MariaDB password (required) |
 | `OPENMRS_ADMIN_PASSWORD`     | Initial OpenMRS admin password (required) |
 | `OPENMRS_HEALTHCHECK_USERNAME` / `_PASSWORD` | Least-privilege healthcheck creds |
-| `OPENMRS_JAVA_MEMORY_OPTS`   | JVM heap (default `-Xmx1g`) |
+| `OPENMRS_JAVA_MEMORY_OPTS`   | JVM heap (default `-Xmx4g`) |
 | `TENAOS_PUBLIC_HOST`         | Hostname used to compute `OPENMRS_PUBLIC_URL` |
 
 ## Layout

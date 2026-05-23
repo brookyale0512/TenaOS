@@ -33,9 +33,16 @@ cd TenaAgent/service
 pip install -r requirements.txt
 TENAOS_LLM_URL=http://localhost:8000/v1 \
 TENAOS_CIEL_ROOT=/var/www/TenaOS/TenaOS-CIEL \
+TENA_AGENT_SERVICE_HOST=127.0.0.1 \
 TENA_AGENT_SERVICE_PORT=8095 \
 python main.py
 ```
+
+Direct TenaAgent access is for local development only. TenaAgent does
+not yet enforce its own API authentication layer, so do not expose
+`:8095` to untrusted networks. Production all-in-one deployments keep
+TenaAgent on loopback behind nginx and expose it only through
+`/agent-api`.
 
 ## Test
 
@@ -57,6 +64,7 @@ python -m pytest
 | `TENAOS_CIEL_SQLITE`        | `<root>/ciel_search.sqlite3` | CIEL store path |
 | `OPENMRS_REST_BASE_URL`     | `http://localhost:18080/openmrs/ws/rest/v1` | OpenMRS REST endpoint |
 | `OPENMRS_FHIR_BASE_URL`     | `http://localhost:18080/openmrs/ws/fhir2/R4` | OpenMRS FHIR endpoint |
+| `TENA_AGENT_SERVICE_HOST`   | `0.0.0.0`                    | TenaAgent listen host; use `127.0.0.1` for direct local runs |
 | `TENA_AGENT_SERVICE_PORT`   | `8095`                       | TenaAgent listen port |
 | `TENA_AGENT_CORS_ORIGINS`   | `http://localhost:3000,http://localhost:5173` | Allowed browser origins |
 | `TENAOS_USE_OPTIMIZED_PROMPTS` | _unset_                   | Use GEPA-optimized prompt overlay if present |
