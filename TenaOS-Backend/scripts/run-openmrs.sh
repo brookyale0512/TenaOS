@@ -110,18 +110,17 @@ tenaos_prepare_managed_restart_properties() {
   fi
 }
 
-# Wait until the OpenMRS REST `session` resource returns 200, indicating
-# Tomcat has finished module startup. The previous "sleep 15 twice" pattern
-# allowed the supervisor to mark OpenMRS healthy before module web startup
-# was actually finished, which is the failure described in
-# PHASE1_VALIDATION.md.
+# Wait until the OpenMRS REST `session` resource returns 200 with admin
+# Basic auth, indicating Tomcat has finished module startup and native REST
+# authentication is usable. Unauthenticated requests can legitimately return
+# 302 during/after first setup, so they are not a reliable readiness signal.
 tenaos_wait_for_openmrs_rest_ready() {
   local timeout_seconds="${OPENMRS_REST_READY_TIMEOUT_SECONDS:-600}"
   local interval_seconds="${OPENMRS_REST_READY_INTERVAL_SECONDS:-5}"
   local elapsed=0
   while [ "$elapsed" -lt "$timeout_seconds" ]; do
     local code
-    code=$(curl -sS -o /dev/null -w '%{http_code}' \
+    code=$(curl -sS -u "admin:${OMRS_ADMIN_USER_PASSWORD}" -o /dev/null -w '%{http_code}' \
       --connect-timeout 3 --max-time 8 \
       "http://localhost:8080/${OMRS_WEBAPP_NAME}/ws/rest/v1/session" || echo 000)
     if [ "$code" = "200" ]; then
@@ -135,6 +134,26 @@ tenaos_wait_for_openmrs_rest_ready() {
     fi
   done
   echo "OpenMRS REST did not become ready within ${timeout_seconds}s" >&2
+  return 1
+}
+
+tenaos_wait_for_first_boot_install() {
+  local timeout_seconds="${OPENMRS_FIRST_BOOT_INSTALL_TIMEOUT_SECONDS:-600}"
+  local interval_seconds="${OPENMRS_FIRST_BOOT_INSTALL_INTERVAL_SECONDS:-5}"
+  local elapsed=0
+  while [ "$elapsed" -lt "$timeout_seconds" ]; do
+    if [ -f "$OPENMRS_RUNTIME_PROPERTIES_FILE" ] &&
+       grep -q "Done refreshing Context" /opt/openmrs/data/openmrs.log 2>/dev/null; then
+      echo "OpenMRS first-boot install completed after ${elapsed}s"
+      return 0
+    fi
+    sleep "$interval_seconds"
+    elapsed=$((elapsed + interval_seconds))
+    if [ $((elapsed % 30)) -eq 0 ]; then
+      echo "Still waiting for OpenMRS first-boot install (elapsed: ${elapsed}s)"
+    fi
+  done
+  echo "OpenMRS first-boot install did not complete within ${timeout_seconds}s" >&2
   return 1
 }
 
@@ -197,10 +216,17 @@ cd /opt/openmrs/data
 /openmrs/startup.sh &
 STARTUP_PID=$!
 
-(
-  if tenaos_wait_for_openmrs_rest_ready; then
-    tenaos_seed_locations_once
-  fi
-) &
+if ! tenaos_wait_for_first_boot_install; then
+  echo "OpenMRS first-boot setup failed; forwarding container exit." >&2
+  kill -TERM "$STARTUP_PID" 2>/dev/null || true
+  wait "$STARTUP_PID" || true
+  exit 1
+fi
 
-wait "$STARTUP_PID"
+# The upstream first-boot path writes runtime properties but the same Tomcat
+# process can remain on /initialsetup. Restart once into the managed path so
+# REST auth and health checks see the initialized runtime properties.
+touch "$OPENMRS_MANAGED_RESTART_FLAG_FILE"
+kill -TERM "$STARTUP_PID" 2>/dev/null || true
+wait "$STARTUP_PID" || true
+tenaos_run_existing_openmrs
