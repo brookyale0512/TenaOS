@@ -154,19 +154,11 @@ software behind [demo.tenaos.com](https://demo.tenaos.com).
 It is not a HIPAA-regulated product, not a CE-marked or FDA-cleared
 medical device, and not safety-of-life software. Operators deploying
 TenaOS in real clinical settings remain responsible for local
-regulatory compliance and clinical risk management. See
-[`SECURITY.md`](SECURITY.md).
+regulatory compliance and clinical risk management.
 
-## Documentation
+## License
 
-| | |
-|---|---|
-| [`DEMO_DEPLOYMENT_README.md`](DEMO_DEPLOYMENT_README.md) | Operator runbook |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute |
-| [`SECURITY.md`](SECURITY.md) | Security disclosure |
-| [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Community standards |
-| [`LICENSE`](LICENSE) | Apache 2.0 |
+Apache 2.0 — see [`LICENSE`](LICENSE).
 
 ## Acknowledgments
 
