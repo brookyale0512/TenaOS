@@ -67,6 +67,24 @@ class Settings:
     # using a known weak credential.
     openmrs_service_password: str = ""
 
+    # OpenMRS drug-order UUIDs — reference application defaults. Override
+    # per deployment if your OpenMRS distribution uses non-standard concept
+    # dictionary seeds. Each value is a CIEL/OpenMRS concept UUID:
+    #   dose_units            = "mg"           (CIEL 161553)
+    #   route                 = "Oral"         (CIEL 160240)
+    #   quantity_units        = "Tablet"       (CIEL 1513)
+    #   frequency_once_daily  = OpenMRS ref-app default order frequency
+    #   default_orderer       = OpenMRS ref-app demo clinician user
+    #   care_setting_outpatient = OpenMRS Outpatient care setting
+    #   drug_order_type       = OpenMRS Drug Order type
+    drug_order_dose_units_uuid: str = "161553AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    drug_order_route_uuid: str = "160240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    drug_order_quantity_units_uuid: str = "1513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    drug_order_frequency_uuid: str = "136ebdb7-e989-47cf-8ec2-4e8b2ffe0ab3"
+    drug_order_orderer_uuid: str = "09fcfd7e-36e7-455f-8fc7-6b47d4fe8c5d"
+    drug_order_care_setting_uuid: str = "6f0c9a92-6f24-11e3-af88-005056821db0"
+    drug_order_type_uuid: str = "131168f4-15f5-102d-96e4-000c29c2a5d7"
+
     cors_allowed_origins: frozenset[str] = field(default_factory=frozenset)
 
     # ---- agent tuning constants (override via env for ops experiments) ----
@@ -148,6 +166,27 @@ class Settings:
             or "2ad20b043cf54dd48e698e1c8e231c99",
             openmrs_service_user=os.getenv("OPENMRS_SERVICE_USER", "admin"),
             openmrs_service_password=os.getenv("OPENMRS_SERVICE_PASSWORD", ""),
+            drug_order_dose_units_uuid=os.getenv(
+                "DRUG_ORDER_DOSE_UNITS_UUID", "161553AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            ),
+            drug_order_route_uuid=os.getenv(
+                "DRUG_ORDER_ROUTE_UUID", "160240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            ),
+            drug_order_quantity_units_uuid=os.getenv(
+                "DRUG_ORDER_QUANTITY_UNITS_UUID", "1513AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            ),
+            drug_order_frequency_uuid=os.getenv(
+                "DRUG_ORDER_FREQUENCY_UUID", "136ebdb7-e989-47cf-8ec2-4e8b2ffe0ab3"
+            ),
+            drug_order_orderer_uuid=os.getenv(
+                "DRUG_ORDER_ORDERER_UUID", "09fcfd7e-36e7-455f-8fc7-6b47d4fe8c5d"
+            ),
+            drug_order_care_setting_uuid=os.getenv(
+                "DRUG_ORDER_CARE_SETTING_UUID", "6f0c9a92-6f24-11e3-af88-005056821db0"
+            ),
+            drug_order_type_uuid=os.getenv(
+                "DRUG_ORDER_TYPE_UUID", "131168f4-15f5-102d-96e4-000c29c2a5d7"
+            ),
             cors_allowed_origins=_cors_origins_from_env(),
             form_agent_max_steps=int(os.getenv("FORM_AGENT_MAX_STEPS", "35")),
             form_agent_target_min_fields=int(os.getenv("FORM_AGENT_TARGET_MIN_FIELDS", "6")),
