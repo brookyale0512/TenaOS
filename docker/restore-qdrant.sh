@@ -18,11 +18,21 @@ set -euo pipefail
 
 QDRANT_URL="${TENAOS_QDRANT_URL:-http://127.0.0.1:6333}"
 SNAPSHOT_DIR="/qdrant/snapshots"
+STATUS_OK_MARKER="/opt/tenaos/runtime/qdrant-restore.ok"
+STATUS_FAIL_MARKER="/opt/tenaos/runtime/qdrant-restore.failed"
 
 log() { printf '[restore-qdrant] %s\n' "$*"; }
 
+# Start the run with a clean slate so the healthcheck reflects this attempt.
+rm -f "$STATUS_OK_MARKER" "$STATUS_FAIL_MARKER"
+mkdir -p "$(dirname "$STATUS_OK_MARKER")"
+
+mark_ok()   { date -u +%FT%TZ > "$STATUS_OK_MARKER"; }
+mark_fail() { date -u +%FT%TZ > "$STATUS_FAIL_MARKER"; }
+
 if [ ! -d "$SNAPSHOT_DIR" ] || ! compgen -G "$SNAPSHOT_DIR/*.snapshot" >/dev/null; then
   log "no snapshots at $SNAPSHOT_DIR — nothing to restore"
+  mark_ok
   exit 0
 fi
 
@@ -36,7 +46,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 curl -fsS --max-time 2 "$QDRANT_URL/" >/dev/null \
-  || { log "ERROR: Qdrant never became ready"; exit 1; }
+  || { log "ERROR: Qdrant never became ready"; mark_fail; exit 1; }
 
 FAILED_COLLECTIONS=()
 
@@ -76,8 +86,12 @@ done
 if [ "${#FAILED_COLLECTIONS[@]}" -gt 0 ]; then
   log "ERROR: failed to restore ${#FAILED_COLLECTIONS[@]} collection(s): ${FAILED_COLLECTIONS[*]}"
   log "Container is up but the AI agent will return zero-evidence results"
-  log "for those collections. Inspect the log above, fix, then restart."
+  log "for those collections. The container HEALTHCHECK will fail until"
+  log "this marker is cleared:"
+  log "  $STATUS_FAIL_MARKER"
+  mark_fail
   exit 1
 fi
 
+mark_ok
 log "restore pass complete"

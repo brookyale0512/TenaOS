@@ -57,7 +57,11 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/agent-api/health"]
+      # Healthy = qdrant-restore one-shot succeeded AND the agent is up.
+      # Keep this in sync with the HEALTHCHECK in Dockerfile.
+      test:
+        - "CMD-SHELL"
+        - "test -f /opt/tenaos/runtime/qdrant-restore.ok && test ! -f /opt/tenaos/runtime/qdrant-restore.failed && curl -fsS http://127.0.0.1/agent-api/health"
       interval: 30s
       timeout: 10s
       retries: 10

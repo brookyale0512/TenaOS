@@ -42,6 +42,12 @@ third_party/
 # Build artifacts
 *.zip
 
+# fetch-models.sh output — large host-side artifacts must never be tracked.
+tenaos-bootstrap/
+qdrant-snapshots/
+*.snapshot
+embedgemma-300m/
+
 # Personal documents
 resume_build/
 *.resume.pdf

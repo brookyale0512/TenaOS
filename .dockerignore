@@ -30,6 +30,13 @@ models/*.gguf
 models/*.litertlm
 models/*.safetensors
 
+# fetch-models.sh output — must never enter the build context.
+tenaos-bootstrap/
+qdrant-snapshots/
+embedgemma-300m/
+*.snapshot
+*.snapshot.checksum
+
 # VCS and editor noise.
 .git/
 .github/
