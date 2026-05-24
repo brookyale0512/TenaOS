@@ -6,7 +6,7 @@
 #   * validates Docker, GPU visibility, ports, and password policy
 #   * fetches host-mounted artifacts
 #   * writes .env with the exact artifact paths
-#   * launches Docker Compose unless --skip-up is provided
+#   * launches Docker Compose and waits for a healthy container unless --skip-up is provided
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -17,8 +17,9 @@ ENV_FILE=".env"
 RUN_FETCH=1
 RUN_UP=1
 ASSUME_YES=0
-ADMIN_PASSWORD="${OPENMRS_ADMIN_PASSWORD:-}"
-DB_PASSWORD="${OPENMRS_DB_PASSWORD:-}"
+ADMIN_PASSWORD="${OPENMRS_ADMIN_PASSWORD:-Admin123}"
+DB_PASSWORD="${OPENMRS_DB_PASSWORD:-Admin123}"
+CONTAINER_NAME="${TENAOS_CONTAINER_NAME:-TenaOS_v1}"
 
 log() { printf '[setup-demo] %s\n' "$*"; }
 die() { printf '[setup-demo] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -30,8 +31,8 @@ Usage: bash scripts/setup-demo.sh [options]
 Options:
   --target-dir DIR          Artifact download directory (default: ./tenaos-bootstrap)
   --port PORT               Host port for the TenaOS web UI (default: 8080)
-  --admin-password PASS     OpenMRS admin/service password
-  --db-password PASS        MariaDB openmrs user password
+  --admin-password PASS     OpenMRS admin/service password (default: Admin123)
+  --db-password PASS        MariaDB openmrs user password (default: Admin123)
   --env-file FILE           Env file to write (default: .env)
   --skip-fetch              Do not run scripts/fetch-models.sh; only validate existing artifacts
   --skip-up                 Do not launch Docker Compose
@@ -39,7 +40,8 @@ Options:
   -h, --help                Show this help
 
 Environment overrides are also honored: TENAOS_BOOTSTRAP_DIR,
-TENAOS_HOST_PORT, OPENMRS_ADMIN_PASSWORD, OPENMRS_DB_PASSWORD.
+TENAOS_HOST_PORT, TENAOS_CONTAINER_NAME, OPENMRS_ADMIN_PASSWORD,
+OPENMRS_DB_PASSWORD.
 EOF
 }
 
@@ -146,6 +148,39 @@ validate_artifacts() {
   [ -f "$snapshots_dir/ciel_concepts.snapshot" ] || die "missing CIEL Qdrant snapshot"
 }
 
+wait_for_container_healthy() {
+  local timeout_seconds="${TENAOS_SETUP_HEALTH_TIMEOUT_SECONDS:-1200}"
+  local interval_seconds=10
+  local elapsed=0
+  log "Waiting for Docker healthcheck on $CONTAINER_NAME ..."
+  while [ "$elapsed" -le "$timeout_seconds" ]; do
+    local status
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+    case "$status" in
+      healthy)
+        log "TenaOS is healthy after ${elapsed}s."
+        return 0
+        ;;
+      unhealthy)
+        docker logs --tail 80 "$CONTAINER_NAME" >&2 || true
+        die "$CONTAINER_NAME became unhealthy. Review the logs above."
+        ;;
+      "")
+        log "Waiting for $CONTAINER_NAME to be created ..."
+        ;;
+      *)
+        if [ $((elapsed % 30)) -eq 0 ]; then
+          log "Still starting ($status, elapsed ${elapsed}s). OpenMRS first boot can take several minutes."
+        fi
+        ;;
+    esac
+    sleep "$interval_seconds"
+    elapsed=$((elapsed + interval_seconds))
+  done
+  docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
+  die "$CONTAINER_NAME did not become healthy within ${timeout_seconds}s."
+}
+
 require_command docker
 require_command python3
 require_command curl
@@ -153,12 +188,6 @@ detect_compose
 check_gpu
 check_port_available "$HOST_PORT"
 
-if [ -z "$ADMIN_PASSWORD" ]; then
-  ADMIN_PASSWORD="$(generate_password)"
-fi
-if [ -z "$DB_PASSWORD" ]; then
-  DB_PASSWORD="$(generate_password)"
-fi
 validate_password OPENMRS_ADMIN_PASSWORD "$ADMIN_PASSWORD"
 validate_password OPENMRS_DB_PASSWORD "$DB_PASSWORD"
 
@@ -184,6 +213,7 @@ fi
 
 write_env_value "$ENV_FILE" TENAOS_PUBLIC_HOST "localhost"
 write_env_value "$ENV_FILE" TENAOS_HOST_PORT "$HOST_PORT"
+write_env_value "$ENV_FILE" TENAOS_CONTAINER_NAME "$CONTAINER_NAME"
 write_env_value "$ENV_FILE" OPENMRS_DB_PASSWORD "$DB_PASSWORD"
 write_env_value "$ENV_FILE" OPENMRS_ADMIN_PASSWORD "$ADMIN_PASSWORD"
 write_env_value "$ENV_FILE" OPENMRS_HEALTHCHECK_USERNAME "admin"
@@ -203,7 +233,10 @@ log "OpenMRS password: $ADMIN_PASSWORD"
 if [ "$RUN_UP" -eq 1 ]; then
   log "Starting TenaOS with ${compose_cmd[*]} up -d ..."
   "${compose_cmd[@]}" --env-file "$ENV_FILE" up -d
-  log "TenaOS is starting. Open http://localhost:$HOST_PORT after the healthcheck becomes healthy."
+  wait_for_container_healthy
+  log "Setup complete."
+  log "Open http://localhost:$HOST_PORT"
+  log "Sign in with admin / $ADMIN_PASSWORD"
 else
   log "Skipping compose launch because --skip-up was provided."
 fi

@@ -41,15 +41,22 @@ Open the app when the container becomes healthy:
 open http://localhost:8080
 ```
 
+Demo credentials:
+
+```text
+Username: admin
+Password: Admin123
+```
+
 If port `8080` is already in use:
 
 ```bash
 bash scripts/setup-demo.sh --port 28061
 ```
 
-The first boot restores Qdrant knowledge-base snapshots and initializes
-OpenMRS automatically. The setup script prints the generated OpenMRS
-admin credentials at the end.
+The first boot restores Qdrant knowledge-base snapshots, initializes
+OpenMRS, and waits for the `TenaOS_v1` container to become healthy
+before reporting success.
 
 ## Artifacts On Hugging Face
 
@@ -85,7 +92,7 @@ localhost. Nothing leaves the container except through `:80`.
 flowchart LR
     Clinician(["Clinician"])
 
-    subgraph Container ["tenaos:latest"]
+    subgraph Container ["TenaOS_v1"]
         direction TB
         Nginx["nginx :80"]
 
