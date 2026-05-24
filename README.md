@@ -8,6 +8,7 @@ Gemma 4 E4B, deployed as a single Docker image.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Gemma 4 E4B](https://img.shields.io/badge/Gemma_4_E4B-on--device-4285F4)](https://huggingface.co/google/gemma-4-E4B-it)
+[![TenaOS Artifacts](https://img.shields.io/badge/Hugging_Face-TenaOS_artifacts-ffcc4d)](https://huggingface.co/beza4588/TenaOS)
 [![OpenMRS](https://img.shields.io/badge/OpenMRS-Ref--App_3-005f9c)](https://openmrs.org/)
 [![Docker](https://img.shields.io/badge/Docker-single_image-2496ED?logo=docker&logoColor=white)](#quickstart)
 
@@ -15,14 +16,65 @@ Gemma 4 E4B, deployed as a single Docker image.
 
 ---
 
-TenaOS turns natural language into standards-based clinical data. A
-clinical officer describes a workflow; the agent searches the CIEL
-medical dictionary, plans the artifact, and produces a validated
-OpenMRS form, scribe note, decision-support recommendation, patient
-handout, or FHIR report. Every clinical change is a draft a human
-approves.
+TenaOS turns natural language into standards-based clinical workflows.
+A clinical officer describes what they need; the agent searches CIEL and
+the WHO/MSF knowledge base, drafts the artifact, validates it through
+middleware, and hands final control back to the clinician.
 
 **Gemma 4 E4B proposes. Middleware verifies. Clinicians approve.**
+
+## Quickstart
+
+TenaOS is designed to run as **one Docker container** with host-mounted
+model and data artifacts. The setup wrapper fetches artifacts, writes
+`.env`, validates Docker/GPU/ports/passwords, and starts the stack.
+
+```bash
+git clone https://github.com/brookyale0512/TenaOS.git
+cd TenaOS
+bash scripts/setup-demo.sh
+```
+
+Open the app when the container becomes healthy:
+
+```bash
+open http://localhost:8080
+```
+
+If port `8080` is already in use:
+
+```bash
+bash scripts/setup-demo.sh --port 28061
+```
+
+The first boot restores Qdrant knowledge-base snapshots and initializes
+OpenMRS automatically. The setup script prints the generated OpenMRS
+admin credentials at the end.
+
+## Artifacts On Hugging Face
+
+The repository stays small. Large runtime artifacts are downloaded from
+Hugging Face and bind-mounted at runtime.
+
+| Artifact | Hugging Face repo | Purpose |
+| --- | --- | --- |
+| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | On-device text + voice inference through `llama.cpp` |
+| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | Dense retrieval embeddings for KB services |
+| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite) | Local terminology lookup and concept validation |
+| Qdrant snapshots | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/beza4588/tenaos-qdrant-snapshots) | WHO/MSF guideline and CIEL semantic-search collections |
+
+If a model requires license acceptance, run `hf auth login` and rerun the
+setup script. The artifact fetcher is idempotent.
+
+## What It Does
+
+| Capability | Description |
+| --- | --- |
+| **Form builder** | Natural-language requests become CIEL-validated OpenMRS forms. |
+| **AI scribe** | Voice or text becomes a SOAP note with coded observations. |
+| **Decision support** | Recommendations are grounded in retrieved WHO/MSF evidence. |
+| **Patient material** | Patient education drafts are generated in accessible language. |
+| **Report builder** | Plain-language questions become deterministic FHIR query plans. |
 
 ## Architecture
 
@@ -76,8 +128,6 @@ Both knowledge-base daemons load **EmbedGemma 300M** in-process and
 share one Qdrant for hybrid (dense + BM25) retrieval. Model weights,
 EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 
-## Quickstart
-
 ### Prerequisites
 
 | | Minimum | Recommended |
@@ -89,57 +139,18 @@ EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 | **Disk** | 30 GB free (weights + image + DB) | 100 GB |
 | **Docker** | 24.0+ with `nvidia-container-toolkit` | latest |
 
-### Steps
+### Manual Setup
 
 ```bash
-# Fetch artifacts, generate .env, validate GPU/port/passwords, and launch.
-bash scripts/setup-demo.sh
+bash scripts/fetch-models.sh
+cp demo.env.example .env
+# Edit .env: rotate OPENMRS_*_PASSWORD and paste the printed artifact paths.
+docker compose up -d
 ```
 
-The setup wrapper validates Docker Compose, NVIDIA GPU visibility, host
-port availability, OpenMRS password policy, and all required artifact
-paths before it starts the container.
-
-The Qdrant knowledge-base collections (`who_msf_guidelines` +
-`ciel_concepts`) restore automatically from the downloaded snapshots
-on first container boot.
-
-If port `8080` is already in use, choose another port:
-
-```bash
-bash scripts/setup-demo.sh --port 28061
-```
-
-If you prefer the manual path, run `bash scripts/fetch-models.sh`, copy
-`demo.env.example` to `.env`, paste the printed artifact paths, rotate
-the `OPENMRS_*_PASSWORD` values, then run `docker compose up -d`.
-
-### Artifact source repositories
-
-| Artifact | HuggingFace repo | Visibility |
-| --- | --- | --- |
-| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | public |
-| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | public (Gemma terms) |
-| CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite) | public model repo |
-| Qdrant snapshots (WHO/MSF + CIEL) | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/beza4588/tenaos-qdrant-snapshots) | public model repo |
-
-If `fetch-models.sh` returns an authorization error for a gated model,
-run `hf auth login` (or `export HF_TOKEN=<your token>`) and re-run the
-script. The script is idempotent.
-
-To self-host the artifacts on your own HuggingFace org, override
+To self-host artifacts on your own Hugging Face org, override
 `TENAOS_HF_GEMMA_REPO`, `TENAOS_HF_CIEL_REPO`, `TENAOS_HF_QDRANT_REPO`,
 or `TENAOS_HF_EMBED_REPO` before running `fetch-models.sh`.
-
-## Capabilities
-
-| | |
-|---|---|
-| **Form builder** | Natural-language → CIEL-validated OpenMRS forms |
-| **AI scribe** | Voice or text → SOAP note + coded observations |
-| **Decision support** | Evidence-grounded recommendations from WHO + MSF guidelines |
-| **Patient material** | Plain-language education drafts in the patient's language |
-| **Report builder** | Plain-language questions → deterministic FHIR query plans |
 
 ## Components
 
