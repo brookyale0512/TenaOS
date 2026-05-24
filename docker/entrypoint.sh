@@ -7,6 +7,20 @@ log() { printf '[tenaos] %s\n' "$*"; }
 
 : "${OPENMRS_DB_PASSWORD:?OPENMRS_DB_PASSWORD must be set (use --env or docker compose)}"
 : "${OPENMRS_ADMIN_PASSWORD:?OPENMRS_ADMIN_PASSWORD must be set (use --env or docker compose)}"
+
+validate_openmrs_admin_password() {
+  local password="$OPENMRS_ADMIN_PASSWORD"
+  if [ "${#password}" -lt 8 ] ||
+     [[ ! "$password" =~ [[:lower:]] ]] ||
+     [[ ! "$password" =~ [[:upper:]] ]] ||
+     [[ ! "$password" =~ [[:digit:]] ]]; then
+    log "ERROR: OPENMRS_ADMIN_PASSWORD must be at least 8 characters and include uppercase, lowercase, and a digit."
+    log "Example shape: Admin123. Rotate before any public deployment."
+    exit 1
+  fi
+}
+
+validate_openmrs_admin_password
 export OPENMRS_VERIFY_USERNAME="${OPENMRS_VERIFY_USERNAME:-${OPENMRS_HEALTHCHECK_USERNAME:-admin}}"
 export OPENMRS_VERIFY_PASSWORD="${OPENMRS_VERIFY_PASSWORD:-${OPENMRS_HEALTHCHECK_PASSWORD:-$OPENMRS_ADMIN_PASSWORD}}"
 export OPENMRS_SERVICE_USER="${OPENMRS_SERVICE_USER:-admin}"

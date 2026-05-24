@@ -58,11 +58,11 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      # Healthy = qdrant-restore one-shot succeeded AND the agent is up.
+      # Healthy = qdrant restore, OpenMRS REST/FHIR, and TenaAgent are up.
       # Keep this in sync with the HEALTHCHECK in Dockerfile.
       test:
         - "CMD-SHELL"
-        - "test -f /opt/tenaos/runtime/qdrant-restore.ok && test ! -f /opt/tenaos/runtime/qdrant-restore.failed && curl -fsS http://127.0.0.1/agent-api/health"
+        - "test -f /opt/tenaos/runtime/qdrant-restore.ok && test ! -f /opt/tenaos/runtime/qdrant-restore.failed && curl -fsS -u \"admin:$${OPENMRS_ADMIN_PASSWORD}\" http://127.0.0.1:8080/openmrs/ws/rest/v1/session >/dev/null && curl -fsS -u \"admin:$${OPENMRS_ADMIN_PASSWORD}\" http://127.0.0.1:8080/openmrs/ws/fhir2/R4/metadata >/dev/null && curl -fsS http://127.0.0.1/agent-api/health"
       interval: 30s
       timeout: 10s
       retries: 10

@@ -240,14 +240,15 @@ ENV LD_LIBRARY_PATH=/opt/tenaos/llm:/usr/local/cuda/lib64 \
 EXPOSE 80
 VOLUME ["/opt/openmrs/data", "/var/lib/mysql", "/qdrant/storage", "/opt/tenaos/runtime"]
 
-# The container is healthy only when BOTH conditions hold:
-#   1. The agent + nginx + LLM are answering /agent-api/health.
-#   2. The one-shot qdrant-restore program reported success (marker file).
-# If qdrant-restore failed, the agent would silently return zero-evidence
-# CDS results, so we surface the failure at the container boundary.
+# The container is healthy only when all critical surfaces are ready:
+#   1. qdrant-restore reported success (marker file).
+#   2. OpenMRS native REST and FHIR are serving.
+#   3. The agent + nginx + LLM are answering /agent-api/health.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=10 \
     CMD test -f /opt/tenaos/runtime/qdrant-restore.ok \
      && test ! -f /opt/tenaos/runtime/qdrant-restore.failed \
+     && curl -fsS -u "admin:${OPENMRS_ADMIN_PASSWORD}" http://127.0.0.1:8080/openmrs/ws/rest/v1/session >/dev/null \
+     && curl -fsS -u "admin:${OPENMRS_ADMIN_PASSWORD}" http://127.0.0.1:8080/openmrs/ws/fhir2/R4/metadata >/dev/null \
      && curl -fsS http://127.0.0.1/agent-api/health \
      || exit 1
 
