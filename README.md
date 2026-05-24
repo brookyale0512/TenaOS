@@ -92,24 +92,27 @@ EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 ### Steps
 
 ```bash
-# 1. Fetch every host-side artifact (Gemma 4 GGUF + mmproj, EmbedGemma,
-#    CIEL SQLite, Qdrant snapshots) from the official HuggingFace repos.
-#    Defaults to ./tenaos-bootstrap/. ~20 GB on disk; one-time download.
-bash scripts/fetch-models.sh
-
-# 2. Configure secrets + artifact paths.
-cp demo.env.example .env
-# Edit .env — rotate OPENMRS_*_PASSWORD and paste the artifact paths
-# printed by fetch-models.sh, including TENAOS_MODELS_PATH.
-
-# 3. Launch.
-docker compose up -d
-open http://localhost:8080
+# Fetch artifacts, generate .env, validate GPU/port/passwords, and launch.
+bash scripts/setup-demo.sh
 ```
+
+The setup wrapper validates Docker Compose, NVIDIA GPU visibility, host
+port availability, OpenMRS password policy, and all required artifact
+paths before it starts the container.
 
 The Qdrant knowledge-base collections (`who_msf_guidelines` +
 `ciel_concepts`) restore automatically from the downloaded snapshots
 on first container boot.
+
+If port `8080` is already in use, choose another port:
+
+```bash
+bash scripts/setup-demo.sh --port 28061
+```
+
+If you prefer the manual path, run `bash scripts/fetch-models.sh`, copy
+`demo.env.example` to `.env`, paste the printed artifact paths, rotate
+the `OPENMRS_*_PASSWORD` values, then run `docker compose up -d`.
 
 ### Artifact source repositories
 
