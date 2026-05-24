@@ -297,7 +297,11 @@ function OrderLabForm({
   const toggleTest = (conceptUuid: string) => {
     setChecked((prev) => {
       const next = new Set(prev);
-      next.has(conceptUuid) ? next.delete(conceptUuid) : next.add(conceptUuid);
+      if (next.has(conceptUuid)) {
+        next.delete(conceptUuid);
+      } else {
+        next.add(conceptUuid);
+      }
       return next;
     });
   };
@@ -307,7 +311,13 @@ function OrderLabForm({
     const allChecked = uuids.every((u) => checked.has(u));
     setChecked((prev) => {
       const next = new Set(prev);
-      uuids.forEach((u) => allChecked ? next.delete(u) : next.add(u));
+      uuids.forEach((u) => {
+        if (allChecked) {
+          next.delete(u);
+        } else {
+          next.add(u);
+        }
+      });
       return next;
     });
   };

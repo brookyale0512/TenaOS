@@ -77,12 +77,15 @@ export function StartVisitDialog({ patientUuid, open, onClose }: StartVisitDialo
   // the last open).
   useEffect(() => {
     if (!open) return;
-    setVisitTypeUuid(resolvedVisitTypeUuid);
-    setLocationUuid(defaultLocationUuid ?? "");
-    setStartDatetime(nowIsoLocal());
-    // If we're missing a location default, surface the picker immediately so
-    // the user knows what's blocking them. Otherwise keep the dialog minimal.
-    setShowAdvanced(!defaultLocationUuid);
+    const timeout = window.setTimeout(() => {
+      setVisitTypeUuid(resolvedVisitTypeUuid);
+      setLocationUuid(defaultLocationUuid ?? "");
+      setStartDatetime(nowIsoLocal());
+      // If we're missing a location default, surface the picker immediately so
+      // the user knows what's blocking them. Otherwise keep the dialog minimal.
+      setShowAdvanced(!defaultLocationUuid);
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [open, resolvedVisitTypeUuid, defaultLocationUuid]);
 
   const visitTypeDisplay = useMemo(

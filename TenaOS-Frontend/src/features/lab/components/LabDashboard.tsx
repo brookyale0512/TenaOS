@@ -574,7 +574,13 @@ function GlobalOrderForm({ onSuccess }: { onSuccess: () => void }) {
                           const allChecked = uuids.every((u) => checked.has(u));
                           setChecked((prev) => {
                             const next = new Set(prev);
-                            uuids.forEach((u) => allChecked ? next.delete(u) : next.add(u));
+                            uuids.forEach((u) => {
+                              if (allChecked) {
+                                next.delete(u);
+                              } else {
+                                next.add(u);
+                              }
+                            });
                             return next;
                           });
                         }}>
@@ -590,7 +596,11 @@ function GlobalOrderForm({ onSuccess }: { onSuccess: () => void }) {
                             <input type="checkbox" checked={isChecked}
                               onChange={() => setChecked((prev) => {
                                 const next = new Set(prev);
-                                next.has(test.conceptUuid) ? next.delete(test.conceptUuid) : next.add(test.conceptUuid);
+                                if (next.has(test.conceptUuid)) {
+                                  next.delete(test.conceptUuid);
+                                } else {
+                                  next.add(test.conceptUuid);
+                                }
                                 return next;
                               })}
                               className="size-4 accent-[var(--clinic-blue)]" />
