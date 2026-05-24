@@ -52,20 +52,9 @@ RUN ln -sfn /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/l
         -DCMAKE_EXE_LINKER_FLAGS="-Wl,-rpath-link,/usr/local/cuda/lib64/stubs" \
     && cmake --build build --config Release --target llama-server -j
 
-# ── Stage 3: build the frontend SPA ───────────────────────────────────────
-FROM node:24-bookworm-slim AS frontend-build
-WORKDIR /workspace
-COPY TenaOS-Frontend/package.json TenaOS-Frontend/package-lock.json TenaOS-Frontend/
-RUN cd TenaOS-Frontend && npm ci
-COPY TenaOS-Frontend/ TenaOS-Frontend/
-COPY TenaOS-Backend/metadata/required-openmrs-metadata.json \
-     TenaOS-Backend/metadata/required-openmrs-metadata.json
-WORKDIR /workspace/TenaOS-Frontend
-RUN npm run build
-
-# ── Stage 4: the runtime image ────────────────────────────────────────────
+# ── Stage 3: stable runtime base ──────────────────────────────────────────
 # ubuntu24.04 base — MariaDB 10.11 (matches existing data), glibc 2.39 (qdrant).
-FROM nvidia/cuda:12.6.1-runtime-ubuntu24.04
+FROM nvidia/cuda:12.6.1-runtime-ubuntu24.04 AS runtime-base
 
 ARG TENAOS_MYSQL_CONNECTOR_J_URL=https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.jar
 ARG TENAOS_MYSQL_CONNECTOR_J_SHA256=e2a3b2fc726a1ac64e998585db86b30fa8bf3f706195b78bb77c5f99bf877bd9
@@ -169,6 +158,22 @@ RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed --upg
         -r /tmp/tena-agent-requirements.txt \
         -r /tmp/kb-requirements.txt \
     && rm /tmp/tena-agent-requirements.txt /tmp/kb-requirements.txt
+
+# ── Stage 4: build the frontend SPA ───────────────────────────────────────
+# Kept after the expensive OpenMRS/runtime/Python dependency layers so
+# frontend-only changes do not invalidate those layers.
+FROM node:24-bookworm-slim AS frontend-build
+WORKDIR /workspace
+COPY TenaOS-Frontend/package.json TenaOS-Frontend/package-lock.json TenaOS-Frontend/
+RUN cd TenaOS-Frontend && npm ci
+COPY TenaOS-Frontend/ TenaOS-Frontend/
+COPY TenaOS-Backend/metadata/required-openmrs-metadata.json \
+     TenaOS-Backend/metadata/required-openmrs-metadata.json
+WORKDIR /workspace/TenaOS-Frontend
+RUN npm run build
+
+# ── Stage 5: final application image ──────────────────────────────────────
+FROM runtime-base
 
 # TenaAgent + KB + CIEL source.
 COPY TenaAgent /opt/tenaos/TenaAgent
