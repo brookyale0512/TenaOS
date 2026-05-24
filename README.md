@@ -58,6 +58,11 @@ The first boot restores Qdrant knowledge-base snapshots, initializes
 OpenMRS, and waits for the `TenaOS_v1` container to become healthy
 before reporting success.
 
+Fresh demo installs also seed 50 synthetic patients with recent visits,
+vitals, and clinical notes so users can immediately exercise patient
+search, charts, queues, reports, notes, vitals, and AI workflows. The
+records are generated locally and contain no real patient data.
+
 ## Artifacts On Hugging Face
 
 The repository stays small. Large runtime artifacts are downloaded from

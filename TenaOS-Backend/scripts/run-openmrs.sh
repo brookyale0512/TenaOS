@@ -205,6 +205,7 @@ EOF
   # Seed runs on every boot path; gated by the marker file so it's a no-op
   # after the first successful run.
   tenaos_seed_locations_once || true
+  tenaos_seed_demo_patients_once || true
   wait "$tomcat_pid"
 }
 
@@ -224,6 +225,23 @@ tenaos_seed_locations_once() {
     return 0
   fi
   : > "$TENAOS_LOCATION_SEED_MARKER_FILE"
+}
+
+tenaos_seed_demo_patients_once() {
+  case "${TENAOS_SEED_DEMO_PATIENTS:-true}" in
+    0|false|False|FALSE|no|No|NO|off|Off|OFF)
+      echo "[tenaos] Demo patient seeding disabled."
+      return 0
+      ;;
+  esac
+  if ! OPENMRS_VERIFY_USERNAME=admin \
+       OPENMRS_VERIFY_PASSWORD="$OMRS_ADMIN_USER_PASSWORD" \
+       OPENMRS_ADMIN_PASSWORD="$OMRS_ADMIN_USER_PASSWORD" \
+       OPENMRS_SERVICE_PASSWORD="$OMRS_ADMIN_USER_PASSWORD" \
+       python3 "$SCRIPT_DIR/seed-demo-patients.py"; then
+    echo "[tenaos] WARN: seed-demo-patients.py failed; will retry next boot." >&2
+    return 0
+  fi
 }
 
 if [ -f "$OPENMRS_MANAGED_RESTART_FLAG_FILE" ] && [ -f "$OPENMRS_RUNTIME_PROPERTIES_FILE" ]; then
