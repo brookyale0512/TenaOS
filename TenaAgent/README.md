@@ -79,7 +79,6 @@ TenaAgent/
 │   ├── requirements.txt
 │   ├── tena_agent_service/   Python package: prompts, tool loops, writers, drafts
 │   └── tests/
-├── manifests/                WHO SMART DAK manifests
 ├── sources/                  WHO SMART submodules (read-only)
 └── evals/                    In-repo eval harnesses (form builder, KB, CIEL)
 ```

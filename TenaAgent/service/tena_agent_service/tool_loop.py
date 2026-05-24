@@ -8,8 +8,6 @@ The loop runs up to MAX_TURNS.  Gemma decides which queries to issue and
 how many.  Each search result is fed back as a tool response so the model
 can issue follow-up queries for different aspects of the patient's situation
 (main condition → treatment → dosing → contraindications → monitoring).
-
-This replaces the old deterministic DAK ToolLoop.  DAK code has been removed.
 """
 
 from __future__ import annotations

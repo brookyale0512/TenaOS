@@ -14,8 +14,8 @@ same source).
 | Use case | Why CIEL SQLite, not Qdrant |
 | --- | --- |
 | Exact lookup by name / synonym | Sub-millisecond, deterministic |
-| Bundle expansion (SMART DAK) | Need authoritative concept IDs |
-| Form-builder seed lists | Hard requirement: must include the WHO DAK reference set |
+| Bundle expansion | Need authoritative concept IDs |
+| Form-builder seed lists | Hard requirement: must include trusted clinical reference sets |
 
 ## Layout
 

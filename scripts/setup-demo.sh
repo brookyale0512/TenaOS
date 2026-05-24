@@ -181,6 +181,29 @@ wait_for_container_healthy() {
   die "$CONTAINER_NAME did not become healthy within ${timeout_seconds}s."
 }
 
+wait_for_openmrs_auth_ready() {
+  local timeout_seconds="${TENAOS_SETUP_OPENMRS_TIMEOUT_SECONDS:-300}"
+  local interval_seconds=5
+  local elapsed=0
+  local url="http://127.0.0.1:${HOST_PORT}/openmrs/ws/rest/v1/session"
+  log "Verifying OpenMRS login readiness through http://localhost:${HOST_PORT} ..."
+  while [ "$elapsed" -le "$timeout_seconds" ]; do
+    if curl -fsS -u "admin:${ADMIN_PASSWORD}" --connect-timeout 3 --max-time 10 "$url" \
+      | python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("authenticated") is True else 1)' \
+      >/dev/null 2>&1; then
+      log "OpenMRS REST authentication is ready after ${elapsed}s."
+      return 0
+    fi
+    if [ $((elapsed % 30)) -eq 0 ]; then
+      log "OpenMRS REST is still warming up (elapsed ${elapsed}s)."
+    fi
+    sleep "$interval_seconds"
+    elapsed=$((elapsed + interval_seconds))
+  done
+  docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
+  die "OpenMRS REST authentication did not become ready within ${timeout_seconds}s."
+}
+
 require_command docker
 require_command python3
 require_command curl
@@ -234,6 +257,7 @@ if [ "$RUN_UP" -eq 1 ]; then
   log "Starting TenaOS with ${compose_cmd[*]} up -d ..."
   "${compose_cmd[@]}" --env-file "$ENV_FILE" up -d
   wait_for_container_healthy
+  wait_for_openmrs_auth_ready
   log "Setup complete."
   log "Open http://localhost:$HOST_PORT"
   log "Sign in with admin / $ADMIN_PASSWORD"
