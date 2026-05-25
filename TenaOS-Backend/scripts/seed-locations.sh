@@ -50,7 +50,7 @@ CURL_AUTH=(-u "${OPENMRS_VERIFY_USERNAME}:${OPENMRS_VERIFY_PASSWORD}")
 REST="$OPENMRS_BASE/openmrs/ws/rest/v1"
 
 LOGIN_LOCATION_TAG_NAME="${TENAOS_LOGIN_LOCATION_TAG:-Login Location}"
-SEED_LOCATIONS_RAW="${TENAOS_SEED_LOCATIONS:-Outpatient,Inpatient,Pharmacy,Laboratory,Reception}"
+SEED_LOCATIONS_RAW="${TENAOS_SEED_LOCATIONS:-Outpatient,Inpatient,Mobile Clinic,Community Outreach}"
 
 # report() writes to stderr so functions can return UUIDs via stdout-capture
 # (e.g. `TAG_UUID=$(resolve_login_location_tag_uuid)`) without log lines
