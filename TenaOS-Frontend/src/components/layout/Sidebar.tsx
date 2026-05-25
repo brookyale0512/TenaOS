@@ -23,35 +23,34 @@ import { openmrsRuntimeConfig } from "@/lib/openmrs/runtimeConfig";
 import { LocationSelector } from "./LocationSelector";
 import { usePublishedReportList } from "@/features/reports/hooks/useReportBuilder";
 
-const navGroups = [
-  {
-    label: "Clinic Operations",
-    items: [
-      { path: "/", icon: LayoutDashboard, label: "Dashboard" },
-      { path: "/visits", icon: Stethoscope, label: "Clinical Visits" },
-      ...(openmrsRuntimeConfig.capabilities.queues ? [{ path: "/queues", icon: ListOrdered, label: "Queues" }] : []),
-      ...(openmrsRuntimeConfig.capabilities.appointments ? [{ path: "/appointments", icon: CalendarDays, label: "Appointments" }] : []),
-    ],
-  },
-  {
-    label: "Patient Care",
-    items: [
-      { path: "/patients", icon: Users, label: "Patients" },
-      { path: "/labs", icon: FlaskConical, label: "Lab Tests", exact: true },
-      { path: "/reports", icon: BarChart3, label: "Reports", exact: true, children: "reports" },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      { path: "/forms", icon: ClipboardList, label: "Manage Forms" },
-      { path: "/reports/manage", icon: FileText, label: "Manage Reports" },
-      { path: "/labs/manage", icon: FlaskConical, label: "Manage Lab Tests" },
-    ],
-  },
-];
-
 export function Sidebar() {
+  const navGroups = [
+    {
+      label: "Clinic Operations",
+      items: [
+        { path: "/", icon: LayoutDashboard, label: "Dashboard" },
+        { path: "/visits", icon: Stethoscope, label: "Clinical Visits" },
+        ...(openmrsRuntimeConfig.capabilities.queues ? [{ path: "/queues", icon: ListOrdered, label: "Queues" }] : []),
+        ...(openmrsRuntimeConfig.capabilities.appointments ? [{ path: "/appointments", icon: CalendarDays, label: "Appointments" }] : []),
+      ],
+    },
+    {
+      label: "Patient Care",
+      items: [
+        { path: "/patients", icon: Users, label: "Patients" },
+        { path: "/labs", icon: FlaskConical, label: "Lab Tests", exact: true },
+        { path: "/reports", icon: BarChart3, label: "Reports", exact: true, children: "reports" },
+      ],
+    },
+    {
+      label: "Administration",
+      items: [
+        { path: "/forms", icon: ClipboardList, label: "Manage Forms" },
+        { path: "/reports/manage", icon: FileText, label: "Manage Reports" },
+        { path: "/labs/manage", icon: FlaskConical, label: "Manage Lab Tests" },
+      ],
+    },
+  ];
   const { sidebarOpen, toggleSidebar } = useUiStore();
   const location = useLocation();
   const publishedReports = usePublishedReportList();
