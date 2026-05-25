@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { LogIn, Loader2 } from "lucide-react";
+import { LogIn, Loader2, Copy, Check, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,56 @@ interface LocationState {
 const DEMO_AUTOLOGIN_ENABLED = import.meta.env.VITE_DEMO_AUTOLOGIN === "true";
 const DEMO_AUTOLOGIN_USERNAME = import.meta.env.VITE_DEMO_AUTOLOGIN_USERNAME ?? "";
 const DEMO_AUTOLOGIN_PASSWORD = import.meta.env.VITE_DEMO_AUTOLOGIN_PASSWORD ?? "";
+
+function DemoBanner() {
+  const [copiedField, setCopiedField] = useState<"username" | "password" | null>(null);
+
+  const copy = (text: string, field: "username" | "password") => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1800);
+    });
+  };
+
+  return (
+    <div className="mb-5 rounded-xl border border-[var(--clinic-teal)]/30 bg-gradient-to-br from-[var(--clinic-teal)]/8 to-[var(--clinic-blue)]/6 px-4 py-3.5 shadow-sm">
+      <div className="flex items-center gap-2 mb-2.5">
+        <FlaskConical size={14} className="text-[var(--clinic-teal)] shrink-0" />
+        <span className="text-xs font-semibold text-[var(--clinic-teal)] uppercase tracking-wide">
+          Live Demo
+        </span>
+      </div>
+      <p className="text-[11px] text-[var(--clinic-slate)] mb-3 leading-relaxed">
+        This is a fully functional demo environment. Use the credentials below to explore TenaOS.
+      </p>
+      <div className="space-y-1.5">
+        {(
+          [
+            { label: "Username", value: DEMO_AUTOLOGIN_USERNAME || "admin", field: "username" },
+            { label: "Password", value: DEMO_AUTOLOGIN_PASSWORD || "Admin123", field: "password" },
+          ] as const
+        ).map(({ label, value, field }) => (
+          <div key={field} className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-1.5 border border-[var(--clinic-teal)]/15">
+            <span className="text-[11px] text-[var(--clinic-slate)] w-14 shrink-0">{label}</span>
+            <span className="flex-1 font-mono text-xs text-[var(--clinic-ink)] select-all">{value}</span>
+            <button
+              type="button"
+              onClick={() => copy(value, field)}
+              className="shrink-0 text-[var(--clinic-slate)] hover:text-[var(--clinic-teal)] transition-colors"
+              aria-label={`Copy ${label}`}
+            >
+              {copiedField === field ? (
+                <Check size={13} className="text-[var(--clinic-teal)]" />
+              ) : (
+                <Copy size={13} />
+              )}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -90,6 +140,7 @@ export function LoginPage() {
             <CardTitle className="text-base">Sign in</CardTitle>
           </CardHeader>
           <CardContent>
+            <DemoBanner />
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertTitle>Sign-in failed</AlertTitle>

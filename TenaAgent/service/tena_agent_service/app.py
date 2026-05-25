@@ -81,6 +81,7 @@ TRACES: dict[str, InsightTrace] = {}
 MATERIALS: dict[str, MaterialTrace] = {}
 SCRIBE_TRACES: dict[str, ScribeTrace] = {}
 _TRACE_MAX = 500  # keep last N completed insight traces in memory
+_MAX_BODY_BYTES = 4 * 1024 * 1024  # 4 MB request body limit
 _LAB_CATALOG: LabCatalogStore | None = None
 DEFAULT_FORM_ENCOUNTER_TYPE_UUID = os.getenv("FORM_DEFAULT_ENCOUNTER_TYPE_UUID") or "0e8230ce-bd1d-43f5-a863-cf44344fa4b0"
 
@@ -726,6 +727,9 @@ class TenaAgentRequestHandler(
     def _read_json(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)
         if length == 0:
+            return {}
+        if length > _MAX_BODY_BYTES:
+            self._send_json({"error": "Request body too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
             return {}
         raw = self.rfile.read(length).decode("utf-8")
         return json.loads(raw) if raw else {}

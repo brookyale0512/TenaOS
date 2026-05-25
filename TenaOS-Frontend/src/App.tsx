@@ -75,13 +75,11 @@ export default function App() {
             <Route path="labs" element={<LabDashboard />} />
             <Route path="labs/manage" element={<LabManagePage />} />
             <Route path="appointments" element={openmrsRuntimeConfig.capabilities.appointments ? <AppointmentsDashboard /> : <PlaceholderPage title="Appointments" description="Appointments REST resources are not available in this OpenMRS runtime." phase="Disabled" />} />
-            <Route path="billing" element={<PlaceholderPage title="Billing" description="Billing will be evaluated after the OpenMRS-only clinical workflow is stable." phase="Later" />} />
             <Route path="reports" element={<PublishedReportListPage />} />
             <Route path="reports/view/:draftId" element={<ReportViewPage />} />
             <Route path="reports/manage" element={<ReportListPage />} />
             <Route path="reports/new" element={<ReportBuilderWorkspace />} />
             <Route path="reports/:draftId" element={<ReportBuilderWorkspace />} />
-            <Route path="agent" element={<PlaceholderPage title="Agentic Control Panel" description="Phase 2 will integrate the agentic setup and control panel after OpenMRS + frontend is verified." phase="Phase 2" />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

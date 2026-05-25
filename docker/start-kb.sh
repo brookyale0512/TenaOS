@@ -36,7 +36,7 @@ for i in $(seq 1 "${TENAOS_KB_COLLECTION_WAIT_ATTEMPTS:-180}"); do
   sleep 2
 done
 
-export TENAOS_KB_HOST=0.0.0.0
+export TENAOS_KB_HOST=127.0.0.1
 export TENAOS_KB_PORT="$PORT"
 export TENAOS_KB_COLLECTION="$COLLECTION"
 

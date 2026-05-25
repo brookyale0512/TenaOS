@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """
-Retrieval core for the v2 WHO knowledge base index.
+Retrieval core for the WHO/MSF guidelines knowledge base.
 
-Designed exclusively for who_knowledge_vec_v2.mv2 — a 132 K-frame memvid index
-built from the WHO/MSF Guidelines CDS Chunking Pipeline.  Every design decision
-aligns with that pipeline's agreed chunk schema and retrieval_priority defaults.
+Backed by Qdrant with hybrid search (BM25 + EmbedGemma dense vectors).
+The public entry point is KBRetriever, which lazily initialises a
+QdrantHybridRetriever on first use and exposes a single search() method.
 
-Key differences from retrieval_core.py (v1):
-  - Single operating mode: always returns top-5, always clinical-grade CDS.
-  - No strict_mode / strict_cds_mode — quality_flags are observational only.
-  - All content_type vocabulary is v2-native (recommendation, implementation,
-    etd, methods_pico, background, research_gap, annex, scope).
-  - retrieval_priority is read from each hit's metadata and used as a compound
-    score multiplier; superseded chunks (rp == 0.0) are hard-dropped.
+Content schema:
+  - content_type vocabulary: recommendation, implementation, etd,
+    methods_pico, background, research_gap, annex, scope.
+  - retrieval_priority from each hit's metadata used as a score multiplier;
+    superseded chunks (rp == 0.0) are hard-dropped before ranking.
   - Enriched per-hit response: headings, doc_type, recommendation_strength,
-    evidence_certainty, source_url exposed for CDS display.
-  - Title matching uses re.search (substring) throughout — v2 titles are full
-    Docling heading paths, not short section labels.
+    evidence_certainty, source_url for CDS display.
+  - Title matching uses re.search (substring) — titles are full Docling
+    heading paths.
 
 Search modes (search_mode parameter):
-  lex  — Tantivy BM25 lexical search (fast, no GPU needed)
+  lex  — BM25 lexical search (fast, no GPU needed)
   sem  — Semantic vector search (requires EmbedGemma embedder)
   rrf  — Reciprocal Rank Fusion of lex + sem (default, best quality)
 """
@@ -28,7 +26,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
 import time
@@ -41,8 +38,6 @@ except ImportError:  # script mode
 
 log = logging.getLogger("kb.retrieval_v2")
 
-KB_DIR     = "/var/www/kbToolUseLora/kb"
-V2_INDEX   = os.path.join(KB_DIR, "who_knowledge_vec_v2.mv2")
 SOURCE_WHO = "WHO Guidelines"
 
 # ── v2 Content-type boost/demote multipliers ──────────────────────────────
@@ -1235,12 +1230,9 @@ def _safe_top1_guardrail(
 # ─────────────────────────────────────────────────────────────────────────────
 
 class KBRetriever:
-    """Thread-safe v2 KB retriever with lazy-loaded memvid handle and embedder."""
+    """Thread-safe WHO/MSF KB retriever backed by QdrantHybridRetriever."""
 
-    def __init__(self, who_index: str = V2_INDEX) -> None:
-        # `who_index` kept for API compatibility with the MV2 daemon so existing
-        # callers keep working; the Qdrant build ignores this path.
-        self._index_path = who_index
+    def __init__(self) -> None:
         self._retriever = None
         self._lock = threading.Lock()
 
