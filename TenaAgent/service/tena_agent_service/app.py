@@ -107,7 +107,6 @@ def _get_lab_catalog(settings: Settings) -> LabCatalogStore:
         _LAB_CATALOG = LabCatalogStore(db_path)
     return _LAB_CATALOG
 _DRAFT_STORE: FormDraftStore | None = None
-_REPORT_STORE: ReportDraftStore | None = None
 _CDS_TRACE_STORE: InsightTraceStore | None = None
 _MATERIAL_TRACE_STORE: InsightTraceStore | None = None
 _SCRIBE_TRACE_STORE: InsightTraceStore | None = None
@@ -171,13 +170,6 @@ def _get_draft_store(settings: Settings) -> FormDraftStore:
     return _DRAFT_STORE
 
 
-def _get_report_store(settings: Settings) -> ReportDraftStore:
-    global _REPORT_STORE
-    if _REPORT_STORE is None:
-        report_db = settings.runtime_dir / "report_drafts.sqlite3"
-        _REPORT_STORE = ReportDraftStore(report_db)
-    return _REPORT_STORE
-
 
 def _get_cds_trace_store(settings: Settings) -> InsightTraceStore:
     global _CDS_TRACE_STORE
@@ -201,7 +193,14 @@ def _get_scribe_trace_store(settings: Settings) -> InsightTraceStore:
 
 
 from .routes.scribe_routes import ScribeRoutesMixin
-from .routes.report_routes import ReportRoutesMixin
+from .routes.report_routes import (
+    ReportRoutesMixin,
+    _get_report_store,
+    _report_draft_payload,
+    _kickoff_report_conversation,
+    _run_report_conversation_turn,
+    _build_report_driver,
+)
 from .routes.labs_routes import LabsRoutesMixin
 
 
@@ -1146,74 +1145,6 @@ def _run_conversation_turn(
             payload={"error": str(exc), "traceback": traceback.format_exc()},
         )
 
-
-def _build_report_driver(
-    settings: Settings, authorization: str | None, cookie: str | None
-) -> ReportConversationDriver:
-    store = _get_report_store(settings)
-    ciel = CielClient(settings)
-    llm = make_llm_client(settings)
-
-    def reader_factory(progress: ProgressCallback | None = None) -> OpenmrsReader:
-        return OpenmrsReader(settings, authorization=authorization, cookie=cookie, progress=progress)
-
-    loop = ReportBuilderToolLoop(store=store, ciel=ciel, reader_factory=reader_factory)
-    return ReportConversationDriver(store=store, ciel=ciel, loop=loop, llm=llm)
-
-
-def _kickoff_report_conversation(
-    settings: Settings, draft_id: str, authorization: str | None, cookie: str | None
-) -> None:
-    driver = _build_report_driver(settings, authorization, cookie)
-    store = _get_report_store(settings)
-    try:
-        driver.kickoff(draft_id)
-    except Exception as exc:
-        _SERVICE_LOGGER.exception("Report kickoff failed for draft %s", draft_id)
-        store.append_event(
-            draft_id,
-            actor="middleware",
-            operation="kickoff_failed",
-            detail=f"Report kickoff failed: {type(exc).__name__}: {exc}",
-            payload={"error": str(exc), "traceback": traceback.format_exc()},
-        )
-
-
-def _run_report_conversation_turn(
-    settings: Settings,
-    draft_id: str,
-    turn: "ReportConversationTurn",
-    authorization: str | None,
-    cookie: str | None,
-) -> None:
-    driver = _build_report_driver(settings, authorization, cookie)
-    store = _get_report_store(settings)
-    started = time.monotonic()
-    _SERVICE_LOGGER.info(
-        "report-draft=%s turn=%s start", draft_id, turn.kind if turn else "?",
-    )
-    try:
-        driver.handle_user_turn(draft_id, turn)
-        _SERVICE_LOGGER.info(
-            "report-draft=%s turn=%s ok elapsed=%.2fs", draft_id, turn.kind, time.monotonic() - started,
-        )
-    except Exception as exc:
-        _SERVICE_LOGGER.exception(
-            "report-draft=%s turn=%s failed after %.2fs", draft_id, turn.kind, time.monotonic() - started,
-        )
-        store.append_event(
-            draft_id,
-            actor="middleware",
-            operation="conversation_turn_failed",
-            detail=f"Report turn failed: {type(exc).__name__}: {exc}",
-            payload={"error": str(exc), "traceback": traceback.format_exc()},
-        )
-
-
-def _report_draft_payload(draft: ReportDraft) -> dict[str, Any]:
-    payload = draft.to_dict()
-    payload["published"] = bool((draft.conversation_context or {}).get("published"))
-    return payload
 
 
 def run() -> None:

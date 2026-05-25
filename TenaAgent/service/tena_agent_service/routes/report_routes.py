@@ -6,18 +6,106 @@ Extracted from `app.py`; relies on attrs supplied by `TenaAgentRequestHandler`
 from __future__ import annotations
 
 import json
+import logging
 import threading
+import time
 import traceback
 from http import HTTPStatus
+from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from ..ciel import CielClient
+from ..config import Settings
+from ..llm_backend import make_llm_client
+from ..openmrs_reader import OpenmrsReader, ProgressCallback
 from ..report_builder_tool_loop import ReportBuilderToolLoop
 from ..report_conversation import (
     ConversationTurn as ReportConversationTurn,
     ReportConversationDriver,
 )
-from ..report_drafts import ReportDraft, ReportDraftNotFoundError
+from ..report_drafts import ReportDraft, ReportDraftNotFoundError, ReportDraftStore
+
+_LOG = logging.getLogger("tenaos.tena_agent.reports")
+
+_REPORT_STORE: ReportDraftStore | None = None
+
+
+def _get_report_store(settings: Settings) -> ReportDraftStore:
+    global _REPORT_STORE
+    if _REPORT_STORE is None:
+        report_db = settings.runtime_dir / "report_drafts.sqlite3"
+        _REPORT_STORE = ReportDraftStore(report_db)
+    return _REPORT_STORE
+
+
+def _report_draft_payload(draft: ReportDraft) -> dict[str, Any]:
+    payload = draft.to_dict()
+    payload["published"] = bool((draft.conversation_context or {}).get("published"))
+    return payload
+
+
+def _build_report_driver(
+    settings: Settings, authorization: str | None, cookie: str | None
+) -> ReportConversationDriver:
+    store = _get_report_store(settings)
+    ciel = CielClient(settings)
+    llm = make_llm_client(settings)
+
+    def reader_factory(progress: ProgressCallback | None = None) -> OpenmrsReader:
+        from ..openmrs_reader import OpenmrsReader as _R
+        return _R(settings, authorization=authorization, cookie=cookie, progress=progress)
+
+    loop = ReportBuilderToolLoop(store=store, ciel=ciel, reader_factory=reader_factory)
+    return ReportConversationDriver(store=store, ciel=ciel, loop=loop, llm=llm)
+
+
+def _kickoff_report_conversation(
+    settings: Settings, draft_id: str, authorization: str | None, cookie: str | None
+) -> None:
+    driver = _build_report_driver(settings, authorization, cookie)
+    store = _get_report_store(settings)
+    try:
+        driver.kickoff(draft_id)
+    except Exception as exc:
+        _LOG.exception("Report kickoff failed for draft %s", draft_id)
+        store.append_event(
+            draft_id,
+            actor="middleware",
+            operation="kickoff_failed",
+            detail=f"Report kickoff failed: {type(exc).__name__}: {exc}",
+            payload={"error": str(exc), "traceback": traceback.format_exc()},
+        )
+
+
+def _run_report_conversation_turn(
+    settings: Settings,
+    draft_id: str,
+    turn: ReportConversationTurn,
+    authorization: str | None,
+    cookie: str | None,
+) -> None:
+    driver = _build_report_driver(settings, authorization, cookie)
+    store = _get_report_store(settings)
+    started = time.monotonic()
+    _LOG.info("report-draft=%s turn=%s start", draft_id, turn.kind if turn else "?")
+    try:
+        driver.handle_user_turn(draft_id, turn)
+        _LOG.info(
+            "report-draft=%s turn=%s ok elapsed=%.2fs",
+            draft_id, turn.kind, time.monotonic() - started,
+        )
+    except Exception as exc:
+        _LOG.exception(
+            "report-draft=%s turn=%s failed after %.2fs",
+            draft_id, turn.kind, time.monotonic() - started,
+        )
+        store.append_event(
+            draft_id,
+            actor="middleware",
+            operation="conversation_turn_failed",
+            detail=f"Report turn failed: {type(exc).__name__}: {exc}",
+            payload={"error": str(exc), "traceback": traceback.format_exc()},
+        )
 
 
 class ReportRoutesMixin:
