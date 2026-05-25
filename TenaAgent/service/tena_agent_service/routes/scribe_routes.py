@@ -3,8 +3,12 @@
 Pulled out of `app.py` so the route-handler class stays under ~1k lines.
 The methods rely on attributes provided by `TenaAgentRequestHandler`
 (self.settings, self._send_json, self._read_json_body, etc.) which are
-resolved at runtime via mixin MRO; this module imports only what the
-method bodies reference directly.
+resolved at runtime via mixin MRO.
+
+Module-level state owned here:
+- SCRIBE_TRACES  — in-memory trace store for async text-scribe SSE flow
+- _get_scribe_trace_store — persistent InsightTraceStore accessor
+- _run_scribe_text_trace  — background thread worker for the trace flow
 """
 from __future__ import annotations
 
@@ -13,15 +17,21 @@ import cgi
 import email.parser
 import json
 import logging
+import os
+import subprocess
 import tempfile
 import threading
 import time
 import traceback
 from http import HTTPStatus
+from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 from ..ciel import CielClient, openmrs_uuid_for_concept_id
+from ..config import Settings
+from ..insight_traces import InsightTraceStore
+from ..llm_backend import make_llm_client
 from ..models import ScribeTrace
 from ..openmrs import OpenMrsClient
 from ..scribe import (
@@ -32,6 +42,101 @@ from ..scribe import (
     soap_to_note_text,
 )
 from ..scribe_tool_loop import SoapScribeToolLoop, resolve_scribe_result
+from .deps import (
+    _evict_old_traces,
+    _openmrs_concept_ref,
+    _parse_dose_amount,
+    _utc_now_iso,
+)
+
+# ---------------------------------------------------------------------------
+# Module-level scribe state
+# ---------------------------------------------------------------------------
+
+SCRIBE_TRACES: dict[str, ScribeTrace] = {}
+
+_SCRIBE_TRACE_STORE: InsightTraceStore | None = None
+
+
+def _get_scribe_trace_store(settings: Settings) -> InsightTraceStore:
+    global _SCRIBE_TRACE_STORE
+    if _SCRIBE_TRACE_STORE is None:
+        _SCRIBE_TRACE_STORE = InsightTraceStore(settings.scribe_traces_db_path, "scribe")
+    return _SCRIBE_TRACE_STORE
+
+
+def _dump_scribe_run_failure(trace_id: str, patient_uuid: str, exc: Exception, tb: str) -> None:
+    logging.getLogger("tenaos.tena_agent.scribe").error(
+        "text_scribe run failed trace_id=%s patient=%s error=%s",
+        trace_id, patient_uuid, exc,
+        exc_info=False,
+    )
+
+
+def _run_scribe_text_trace(
+    settings: Settings,
+    trace_id: str,
+    authorization: str | None,
+    cookie: str | None,
+    body: dict[str, Any],
+) -> None:
+    trace = SCRIBE_TRACES[trace_id]
+    note_text = (body.get("noteText") or body.get("note_text") or "").strip()
+    patient_uuid = (body.get("patientUuid") or body.get("patient_uuid") or "").strip()
+    language = (body.get("language") or "english").strip().lower()
+    try:
+        llm = make_llm_client(settings)
+        original_note = note_text
+        if language == "amharic":
+            trace.add("model_tool_call", "translate_note", "Translating Amharic note to English before SOAP extraction.")
+            trans_resp = llm.chat(build_translation_prompt(note_text), temperature=0.1, max_tokens=800)
+            translation = trans_resp.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            if translation:
+                note_text = translation
+            trace.add("middleware_result", "Translation complete", "Amharic note translated for SOAP extraction.", {"translatedText": note_text})
+
+        patient_summary: str | None = None
+        if patient_uuid:
+            try:
+                openmrs = OpenMrsClient(settings, authorization=authorization, cookie=cookie)
+                ctx = openmrs.build_patient_context(patient_uuid)
+                patient_summary = ctx.to_kb_query()
+                trace.add("context", "Built patient context", "Patient background prepared for scribe context.", {"summary": patient_summary})
+            except Exception as exc:
+                trace.add("context", "Patient context unavailable", str(exc))
+
+        ciel = CielClient(settings)
+
+        def sink(event: dict[str, Any]) -> None:
+            trace.add(str(event.get("type") or "event"), str(event.get("title") or ""), str(event.get("detail") or ""), event.get("payload") or {})
+
+        try:
+            resolved = SoapScribeToolLoop(llm, ciel, event_sink=sink, trace_store=_get_scribe_trace_store(settings)).run(note_text, patient_summary)
+        except Exception as exc:
+            trace.add("error", "SOAP tool loop failed", f"{type(exc).__name__}: {exc}")
+            messages = build_scribe_prompt(note_text, patient_summary)
+            response = llm.chat(messages, temperature=0.1, max_tokens=1600)
+            raw = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            result = parse_scribe_response(raw)
+            resolved = resolve_scribe_result(result, ciel)
+            trace.add("model_reasoning", "One-shot fallback response", raw[:1800], {"fallback": True})
+            trace.add("model_summary", "Fallback SOAP parsed", "Parsed legacy one-shot SOAP JSON response.", {"fallback": True})
+
+        payload = {
+            "soap": resolved["soap"],
+            "concepts": resolved["concepts"],
+            "observations": resolved["observations"],
+            "medications": resolved["medications"],
+            "generationTrace": [event.to_dict() for event in trace.events],
+            "soapText": soap_to_note_text(resolved["soap"]),
+        }
+        if language == "amharic" and note_text != original_note:
+            payload["translatedText"] = note_text
+        trace.complete(payload)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        _dump_scribe_run_failure(trace_id, patient_uuid, exc, tb)
+        trace.fail(f"{type(exc).__name__}: {exc}", {"request": body, "traceback": tb.splitlines()[-12:]})
 
 
 class ScribeRoutesMixin:
@@ -265,7 +370,7 @@ class ScribeRoutesMixin:
 
             ciel = CielClient(self.settings)
             try:
-                resolved = SoapScribeToolLoop(llm, ciel, trace_store=_get_scribe_trace_store(settings)).run(note_text, patient_summary)
+                resolved = SoapScribeToolLoop(llm, ciel, trace_store=_get_scribe_trace_store(self.settings)).run(note_text, patient_summary)
             except Exception as exc:
                 logging.getLogger("tenaos.tena_agent.scribe").warning(
                     "SOAP tool loop failed; falling back to one-shot scribe: %s", exc

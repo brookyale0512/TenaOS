@@ -32,13 +32,20 @@ _LOG = logging.getLogger("tenaos.tena_agent")
 def _use_optimized_prompts() -> bool:
     """Phase 2 feature flag: when on, prefer prompts/optimized/<name>.txt.
 
-    Production stays on the pinned prompts/<name>.txt unless ``CDS_USE_OPTIMIZED_PROMPTS``
-    is explicitly set to a truthy value. The optimized directory is populated by
-    [TenaOS_DeepSeek/gepa/run_optimization.py](../../gepa/run_optimization.py) after a
+    Checks two environment variables (in priority order):
+    - ``TENAOS_USE_OPTIMIZED_PROMPTS`` — canonical name used by config.py / docker-compose
+    - ``CDS_USE_OPTIMIZED_PROMPTS`` — legacy name, honoured for backwards compatibility
+
+    Set either to ``1``, ``true``, ``yes``, or ``on`` to activate.  The
+    optimized directory is populated by the GEPA optimisation pipeline after a
     successful promotion check.
     """
     import os
-    flag = os.environ.get("CDS_USE_OPTIMIZED_PROMPTS", "").strip().lower()
+    flag = (
+        os.environ.get("TENAOS_USE_OPTIMIZED_PROMPTS")
+        or os.environ.get("CDS_USE_OPTIMIZED_PROMPTS")
+        or ""
+    ).strip().lower()
     return flag in {"1", "true", "yes", "on"}
 
 

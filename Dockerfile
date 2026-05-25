@@ -76,6 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         python3 python3-venv python3-pip \
         libgomp1 \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64

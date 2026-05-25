@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-import base64
-import cgi
-import email.parser
 import json
 import logging
 import os
-import re
-import subprocess
-import tempfile
 import threading
 import time
 import traceback
@@ -22,21 +16,13 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
-from .ciel import CielClient, openmrs_uuid_for_concept_id
+from .ciel import CielClient
 from .config import Settings
 from .form_builder_tool_loop import FormBuilderToolLoop
-from .scribe import (
-    _SYSTEM_PROMPT as SCRIBE_SYSTEM_PROMPT,
-    build_scribe_prompt,
-    build_translation_prompt,
-    parse_scribe_response,
-    soap_to_note_text,
-)
-from .scribe_tool_loop import SoapScribeToolLoop, resolve_scribe_result
 from .form_conversation import ConversationTurn, FormConversationDriver
 from .form_drafts import DraftNotFoundError, FormDraftStore
 from .insight_traces import InsightTraceStore
-from .models import InsightTrace, MaterialTrace, ScribeTrace
+from .models import InsightTrace, MaterialTrace
 from .openmrs import OpenMrsClient, PatientInsightContext
 from .openmrs_reader import OpenmrsReader, ProgressCallback
 from .openmrs_writer import OpenmrsWriter
@@ -48,68 +34,19 @@ from .report_conversation import (
 from .report_drafts import ReportDraft, ReportDraftNotFoundError, ReportDraftStore
 from .tool_loop import KbAgentLoop, KbGuidelinesClient
 from .material_loop import PatientMaterialLoop
-from .lab_catalog import (
-    LabCatalogStore,
-    add_lab_test_from_description,
-    confirm_add_candidate,
-)
 from .llm_client import LlmClient
 from .llm_backend import make_llm_client
-
-
-def _utc_now_iso() -> str:
-    # OpenMRS REST date conversion expects ISO8601 long format with timezone
-    # offset as +0000, not Python's default +00:00 suffix.
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000%z")
-
-
-def _openmrs_concept_ref(concept_id_or_uuid: str) -> str:
-    raw = str(concept_id_or_uuid or "").strip()
-    if not raw:
-        return raw
-    if raw.isdigit():
-        return openmrs_uuid_for_concept_id(raw)
-    return raw
-
-
-def _parse_dose_amount(text: str) -> float:
-    match = re.search(r"(\d+(?:\.\d+)?)", text or "")
-    return float(match.group(1)) if match else 1.0
+from .routes.deps import _evict_old_traces
 
 
 TRACES: dict[str, InsightTrace] = {}
 MATERIALS: dict[str, MaterialTrace] = {}
-SCRIBE_TRACES: dict[str, ScribeTrace] = {}
-_TRACE_MAX = 500  # keep last N completed insight traces in memory
 _MAX_BODY_BYTES = 4 * 1024 * 1024  # 4 MB request body limit
-_LAB_CATALOG: LabCatalogStore | None = None
 DEFAULT_FORM_ENCOUNTER_TYPE_UUID = os.getenv("FORM_DEFAULT_ENCOUNTER_TYPE_UUID") or "0e8230ce-bd1d-43f5-a863-cf44344fa4b0"
 
-
-def _evict_old_traces(store: dict[str, Any], max_size: int = _TRACE_MAX) -> None:
-    """Drop the oldest entries once the store exceeds max_size.
-
-    Only completed/failed traces are candidates so in-flight work is never
-    evicted; if all entries are running we leave the store as-is.
-    """
-    if len(store) <= max_size:
-        return
-    done = [k for k, v in store.items() if getattr(v, "status", "") in {"completed", "failed"}]
-    for key in done[: len(store) - max_size]:
-        store.pop(key, None)
-
-
-def _get_lab_catalog(settings: Settings) -> LabCatalogStore:
-    global _LAB_CATALOG
-    if _LAB_CATALOG is None:
-        from pathlib import Path as _Path
-        db_path = settings.runtime_dir / "lab_catalog.sqlite3"
-        _LAB_CATALOG = LabCatalogStore(db_path)
-    return _LAB_CATALOG
 _DRAFT_STORE: FormDraftStore | None = None
 _CDS_TRACE_STORE: InsightTraceStore | None = None
 _MATERIAL_TRACE_STORE: InsightTraceStore | None = None
-_SCRIBE_TRACE_STORE: InsightTraceStore | None = None
 
 
 class _JsonFormatter(logging.Formatter):
@@ -183,13 +120,6 @@ def _get_material_trace_store(settings: Settings) -> InsightTraceStore:
     if _MATERIAL_TRACE_STORE is None:
         _MATERIAL_TRACE_STORE = InsightTraceStore(settings.material_traces_db_path, "material")
     return _MATERIAL_TRACE_STORE
-
-
-def _get_scribe_trace_store(settings: Settings) -> InsightTraceStore:
-    global _SCRIBE_TRACE_STORE
-    if _SCRIBE_TRACE_STORE is None:
-        _SCRIBE_TRACE_STORE = InsightTraceStore(settings.scribe_traces_db_path, "scribe")
-    return _SCRIBE_TRACE_STORE
 
 
 from .routes.scribe_routes import ScribeRoutesMixin
@@ -899,66 +829,6 @@ def _run_material(settings: Settings, patient_uuid: str, trace_id: str, authoriz
     except Exception as exc:
         tb = traceback.format_exc()
         _dump_run_failure("patient_material", trace_id, patient_uuid, exc, tb)
-        trace.fail(f"{type(exc).__name__}: {exc}", {"request": body, "traceback": tb.splitlines()[-12:]})
-
-
-def _run_scribe_text_trace(settings: Settings, trace_id: str, authorization: str | None, cookie: str | None, body: dict[str, Any]) -> None:
-    trace = SCRIBE_TRACES[trace_id]
-    note_text = (body.get("noteText") or body.get("note_text") or "").strip()
-    patient_uuid = (body.get("patientUuid") or body.get("patient_uuid") or "").strip()
-    language = (body.get("language") or "english").strip().lower()
-    try:
-        llm = make_llm_client(settings)
-        original_note = note_text
-        if language == "amharic":
-            trace.add("model_tool_call", "translate_note", "Translating Amharic note to English before SOAP extraction.")
-            trans_resp = llm.chat(build_translation_prompt(note_text), temperature=0.1, max_tokens=800)
-            translation = trans_resp.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-            if translation:
-                note_text = translation
-            trace.add("middleware_result", "Translation complete", "Amharic note translated for SOAP extraction.", {"translatedText": note_text})
-
-        patient_summary: str | None = None
-        if patient_uuid:
-            try:
-                openmrs = OpenMrsClient(settings, authorization=authorization, cookie=cookie)
-                ctx = openmrs.build_patient_context(patient_uuid)
-                patient_summary = ctx.to_kb_query()
-                trace.add("context", "Built patient context", "Patient background prepared for scribe context.", {"summary": patient_summary})
-            except Exception as exc:
-                trace.add("context", "Patient context unavailable", str(exc))
-
-        ciel = CielClient(settings)
-
-        def sink(event: dict[str, Any]) -> None:
-            trace.add(str(event.get("type") or "event"), str(event.get("title") or ""), str(event.get("detail") or ""), event.get("payload") or {})
-
-        try:
-            resolved = SoapScribeToolLoop(llm, ciel, event_sink=sink, trace_store=_get_scribe_trace_store(settings)).run(note_text, patient_summary)
-        except Exception as exc:
-            trace.add("error", "SOAP tool loop failed", f"{type(exc).__name__}: {exc}")
-            messages = build_scribe_prompt(note_text, patient_summary)
-            response = llm.chat(messages, temperature=0.1, max_tokens=1600)
-            raw = response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            result = parse_scribe_response(raw)
-            resolved = resolve_scribe_result(result, ciel)
-            trace.add("model_reasoning", "One-shot fallback response", raw[:1800], {"fallback": True})
-            trace.add("model_summary", "Fallback SOAP parsed", "Parsed legacy one-shot SOAP JSON response.", {"fallback": True})
-
-        payload = {
-            "soap": resolved["soap"],
-            "concepts": resolved["concepts"],
-            "observations": resolved["observations"],
-            "medications": resolved["medications"],
-            "generationTrace": [event.to_dict() for event in trace.events],
-            "soapText": soap_to_note_text(resolved["soap"]),
-        }
-        if language == "amharic" and note_text != original_note:
-            payload["translatedText"] = note_text
-        trace.complete(payload)
-    except Exception as exc:
-        tb = traceback.format_exc()
-        _dump_run_failure("text_scribe", trace_id, patient_uuid, exc, tb)
         trace.fail(f"{type(exc).__name__}: {exc}", {"request": body, "traceback": tb.splitlines()[-12:]})
 
 

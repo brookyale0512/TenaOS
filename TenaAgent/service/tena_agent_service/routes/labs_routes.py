@@ -2,16 +2,36 @@
 
 Extracted from `app.py`; relies on attrs supplied by `TenaAgentRequestHandler`
 (self.settings, self._send_json, self._read_json_body, etc.).
+
+Module-level state owned here:
+- _LAB_CATALOG / _get_lab_catalog — singleton LabCatalogStore accessor
 """
 from __future__ import annotations
 
 from http import HTTPStatus
 
+from ..ciel import CielClient
+from ..config import Settings
 from ..lab_catalog import (
     LabCatalogStore,
     add_lab_test_from_description,
     confirm_add_candidate,
 )
+from ..llm_backend import make_llm_client
+
+# ---------------------------------------------------------------------------
+# Module-level lab catalog state
+# ---------------------------------------------------------------------------
+
+_LAB_CATALOG: LabCatalogStore | None = None
+
+
+def _get_lab_catalog(settings: Settings) -> LabCatalogStore:
+    global _LAB_CATALOG
+    if _LAB_CATALOG is None:
+        db_path = settings.runtime_dir / "lab_catalog.sqlite3"
+        _LAB_CATALOG = LabCatalogStore(db_path)
+    return _LAB_CATALOG
 
 
 class LabsRoutesMixin:

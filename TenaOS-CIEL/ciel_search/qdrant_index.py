@@ -367,10 +367,19 @@ class QdrantHybridSearcher:
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             query_filter=query_filter,
             limit=limit,
-            with_payload=False,
+            # Request the concept_id payload field so _hydrate_hits can look
+            # up results in SQLite by the original concept_id rather than the
+            # Qdrant point ID (which may be a UUID5 for non-numeric IDs).
+            with_payload=["concept_id"],
             with_vectors=False,
         )
-        return [(str(point.id), float(point.score or 0.0)) for point in response.points]
+        return [
+            (
+                str((point.payload or {}).get("concept_id") or point.id),
+                float(point.score or 0.0),
+            )
+            for point in response.points
+        ]
 
     @staticmethod
     def _build_filter(filters: ConceptSearchFilters):

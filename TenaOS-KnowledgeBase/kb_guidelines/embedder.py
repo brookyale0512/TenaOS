@@ -85,6 +85,10 @@ class EmbedGemmaEmbedder(EmbeddingProvider):  # type: ignore[misc]
                          self.dimension, self._model.max_seq_length)
             except Exception as exc:
                 log.error("Failed to load EmbedGemma base: %s", exc)
+                raise RuntimeError(
+                    f"EmbedGemma model could not be loaded from '{MODEL_PATH}'. "
+                    "Check EMBEDGEMMA_PATH and that the model snapshot is present."
+                ) from exc
 
     @property
     def dimension(self) -> int:
@@ -111,9 +115,6 @@ class EmbedGemmaEmbedder(EmbeddingProvider):  # type: ignore[misc]
     def embed_documents(self, texts: Sequence[str]) -> List[List[float]]:
         """Embed documents with multi-window pooling for large chunks."""
         self._load()
-        if self._model is None:
-            return [[0.0] * 768] * len(texts)
-
         results: List[List[float]] = []
         # Collect all windows flat, track which doc each belongs to
         doc_window_counts: List[int] = []
@@ -141,8 +142,6 @@ class EmbedGemmaEmbedder(EmbeddingProvider):  # type: ignore[misc]
     def embed_query(self, text: str) -> List[float]:
         """Embed a single query — queries are short, always one window."""
         self._load()
-        if self._model is None:
-            return [0.0] * 768
         vec = self._model.encode(
             [text[:WINDOW_CHARS]],
             normalize_embeddings=True,
