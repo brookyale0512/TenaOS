@@ -149,7 +149,6 @@ EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 | | Minimum | Recommended |
 |---|---|---|
 | **OS** | Linux x86-64 | Ubuntu 22.04+ |
-| **GPU** | NVIDIA, compute ≥ 8.0 (Ampere) | A100 / RTX 40-series |
 | **GPU VRAM** | 16 GB (BF16 Gemma 4 E4B fits comfortably) | 24 GB+ for headroom |
 | **System RAM** | 16 GB | 32 GB |
 | **Disk** | 30 GB free (weights + image + DB) | 100 GB |
