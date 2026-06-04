@@ -187,13 +187,13 @@ Both knowledge-base daemons load **EmbedGemma 300M** in-process and share one Qd
 
 ### Prerequisites
 
-| | Minimum | Recommended |
-|---|---|---|
-| **OS** | Linux x86-64 | Ubuntu 22.04+ |
-| **GPU VRAM** | 16 GB | 24 GB+ |
-| **System RAM** | 16 GB | 32 GB |
-| **Disk** | 30 GB | 100 GB |
-| **Docker** | 24.0+ with `nvidia-container-toolkit` | latest |
+| | Minimum |
+|---|---|
+| **OS** | Linux x86-64 |
+| **GPU VRAM** | 16 GB |
+| **System RAM** | 16 GB |
+| **Disk** | 30 GB |
+| **Docker** | 24.0+ with `nvidia-container-toolkit` |
 
 ### Manual Setup
 
