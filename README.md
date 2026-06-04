@@ -7,6 +7,7 @@ low- and middle-income countries — built on OpenMRS, powered by
 Gemma 4 E4B, deployed as a single Docker image.
 
 [![Read the Technical Report](https://img.shields.io/badge/READ%20THE%20TECHNICAL%20REPORT-FF3D00?style=for-the-badge&logo=adobeacrobatreader&logoColor=white&labelColor=FF3D00)](https://tenaos.com/assets/tenaos-technical-report.pdf)
+[![Live Demo](https://img.shields.io/badge/LIVE%20DEMO-14B8A6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=14B8A6)](https://demo.tenaos.com)
 
 <br/>
 
