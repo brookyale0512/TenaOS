@@ -6,15 +6,15 @@ An AI-native clinical operating system for primary-care clinics in
 low- and middle-income countries — built on OpenMRS, powered by
 Gemma 4 E4B, deployed as a single Docker image.
 
+[![Read the Technical Report](https://img.shields.io/badge/READ%20THE%20TECHNICAL%20REPORT-FF3D00?style=for-the-badge&logo=adobeacrobatreader&logoColor=white&labelColor=FF3D00)](https://tenaos.com/assets/tenaos-technical-report.pdf)
+
+<br/>
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Gemma 4 E4B](https://img.shields.io/badge/Gemma_4_E4B-on--device-4285F4)](https://huggingface.co/google/gemma-4-E4B-it)
 [![TenaOS Artifacts](https://img.shields.io/badge/Hugging_Face-TenaOS_artifacts-ffcc4d)](https://huggingface.co/beza4588/TenaOS)
 [![OpenMRS](https://img.shields.io/badge/OpenMRS-Ref--App_3-005f9c)](https://openmrs.org/)
 [![Docker](https://img.shields.io/badge/Docker-single_image-2496ED?logo=docker&logoColor=white)](#quickstart)
-
-<br/>
-
-[![Read the Technical Report](https://img.shields.io/badge/%F0%9F%93%84%20Read%20the%20Technical%20Report-PDF-2563EB?style=for-the-badge&logoColor=white)](https://tenaos.com/assets/tenaos-technical-report.pdf)
 
 </div>
 
