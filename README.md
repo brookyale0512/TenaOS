@@ -12,6 +12,10 @@ Gemma 4 E4B, deployed as a single Docker image.
 [![OpenMRS](https://img.shields.io/badge/OpenMRS-Ref--App_3-005f9c)](https://openmrs.org/)
 [![Docker](https://img.shields.io/badge/Docker-single_image-2496ED?logo=docker&logoColor=white)](#quickstart)
 
+<br/>
+
+[![Read the Technical Report](https://img.shields.io/badge/%F0%9F%93%84%20Read%20the%20Technical%20Report-PDF-2563EB?style=for-the-badge&logoColor=white)](https://tenaos.com/assets/tenaos-technical-report.pdf)
+
 </div>
 
 ---
