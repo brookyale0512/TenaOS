@@ -15,7 +15,7 @@ Gemma 4 E4B, deployed as a single Docker image.
   <img src="https://img.youtube.com/vi/pdnZWdWBomM/maxresdefault.jpg" alt="Watch the TenaOS end-to-end demo on YouTube" width="640">
 </a>
 
-<sub><i>This video is a complete, extended end-to-end walkthrough of TenaOS. Short on time? Skip ahead to <a href="https://youtu.be/pdnZWdWBomM?t=53"><b>0:53</b></a> to jump straight into the live demo.</i></sub>
+<i>This video is a complete, extended end-to-end walkthrough of TenaOS. Short on time? Skip ahead to <a href="https://youtu.be/pdnZWdWBomM?t=53"><b>0:53</b></a> to jump straight into the live demo.</i>
 
 <br/>
 
