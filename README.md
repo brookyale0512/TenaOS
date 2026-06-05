@@ -11,6 +11,14 @@ Gemma 4 E4B, deployed as a single Docker image.
 
 <br/>
 
+<a href="https://youtu.be/pdnZWdWBomM?t=53">
+  <img src="https://img.youtube.com/vi/pdnZWdWBomM/maxresdefault.jpg" alt="Watch the TenaOS end-to-end demo on YouTube" width="640">
+</a>
+
+<sub><i>This video is a complete, extended end-to-end walkthrough of TenaOS. Short on time? Skip ahead to <a href="https://youtu.be/pdnZWdWBomM?t=53"><b>0:53</b></a> to jump straight into the live demo.</i></sub>
+
+<br/>
+
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Gemma 4 E4B](https://img.shields.io/badge/Gemma_4_E4B-on--device-4285F4)](https://huggingface.co/google/gemma-4-E4B-it)
 [![TenaOS Artifacts](https://img.shields.io/badge/Hugging_Face-TenaOS_artifacts-ffcc4d)](https://huggingface.co/beza4588/TenaOS)
