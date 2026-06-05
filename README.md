@@ -11,7 +11,7 @@ Gemma 4 E4B, deployed as a single Docker image.
 
 <br/>
 
-<a href="https://youtu.be/pdnZWdWBomM?t=53">
+<a href="https://youtu.be/pdnZWdWBomM">
   <img src="https://img.youtube.com/vi/pdnZWdWBomM/maxresdefault.jpg" alt="Watch the TenaOS end-to-end demo on YouTube" width="640">
 </a>
 
