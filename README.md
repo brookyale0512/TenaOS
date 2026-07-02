@@ -4,7 +4,8 @@
 
 An AI-native clinical operating system for primary-care clinics in
 low- and middle-income countries — built on OpenMRS, powered by
-Gemma 4 E4B, deployed as a single Docker image.
+[Gemma 4 E4B with a task-tagged LoRA adapter merged in](https://huggingface.co/beza4588/TenaOS),
+deployed as a single Docker image.
 
 [![Read the Technical Report](https://img.shields.io/badge/READ%20THE%20TECHNICAL%20REPORT-FF3D00?style=for-the-badge&logo=adobeacrobatreader&logoColor=white&labelColor=FF3D00)](https://tenaos.com/assets/tenaos-technical-report.pdf)
 [![Live Demo](https://img.shields.io/badge/LIVE%20DEMO-14B8A6?style=for-the-badge&logo=googlechrome&logoColor=white&labelColor=14B8A6)](https://demo.tenaos.com)
@@ -20,7 +21,7 @@ Gemma 4 E4B, deployed as a single Docker image.
 <br/>
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Gemma 4 E4B](https://img.shields.io/badge/Gemma_4_E4B-on--device-4285F4)](https://huggingface.co/google/gemma-4-E4B-it)
+[![Gemma 4 E4B + LoRA](https://img.shields.io/badge/Gemma_4_E4B_%2B_LoRA-on--device-4285F4)](https://huggingface.co/beza4588/TenaOS)
 [![TenaOS Artifacts](https://img.shields.io/badge/Hugging_Face-TenaOS_artifacts-ffcc4d)](https://huggingface.co/beza4588/TenaOS)
 [![OpenMRS](https://img.shields.io/badge/OpenMRS-Ref--App_3-005f9c)](https://openmrs.org/)
 [![Docker](https://img.shields.io/badge/Docker-single_image-2496ED?logo=docker&logoColor=white)](#quickstart)
@@ -83,7 +84,7 @@ Hugging Face and bind-mounted at runtime.
 
 | Artifact | Hugging Face repo | Purpose |
 | --- | --- | --- |
-| Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | On-device text + voice inference through `llama.cpp` |
+| Gemma 4 E4B + task-tagged LoRA (merged), F16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | On-device text + voice inference through `llama.cpp` |
 | EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | Dense retrieval embeddings for the WHO/MSF guideline KB |
 | SapBERT encoder | [`cambridgeltl/SapBERT-from-PubMedBERT-fulltext`](https://huggingface.co/cambridgeltl/SapBERT-from-PubMedBERT-fulltext) | Dense biomedical-concept embeddings for CIEL semantic search |
 | CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite) | Local terminology lookup and concept validation |
@@ -170,7 +171,7 @@ flowchart LR
 
         subgraph AI ["On-device AI"]
             direction LR
-            LLM["llama.cpp :8001<br/>Gemma 4 E4B BF16"]
+            LLM["llama.cpp :8001<br/>Gemma 4 E4B + LoRA"]
             KBG["kb-guidelines :4276<br/>WHO + MSF"]
             KBC["kb-ciel :4277<br/>CIEL semantic"]
         end
@@ -199,7 +200,7 @@ flowchart LR
 
 Both knowledge-base daemons load **EmbedGemma 300M** in-process and share one Qdrant instance for hybrid (dense + BM25) retrieval. Model weights, EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 
-**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) serves Gemma 4 E4B at BF16 with the LoRA adapter weights merged for full-fidelity inference. A tablet tier (consumer Android or ARM device) can use a quantized build of the same merged weights when that artifact is present, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
+**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) serves Gemma 4 E4B at full-precision F16 with the LoRA adapter weights merged in — this is the artifact `scripts/fetch-models.sh` downloads and `docker/start-llama.sh` serves by default. A tablet tier (consumer Android or ARM device) can use a quantized build of the same merged weights when that artifact is present, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
 
 ### Prerequisites
 
@@ -266,7 +267,7 @@ another instance's `tenaos-bootstrap/`, so each has an independent
 `llama.cpp` process and model files. Budget VRAM and disk as a
 multiple of the per-instance numbers above; a 16 GB-VRAM model
 comfortably fits several times over on a data-center GPU (e.g. two
-BF16 instances use well under half of an 80 GB A100).
+merged-F16 instances use well under half of an 80 GB A100).
 
 ---
 
@@ -420,7 +421,7 @@ Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma; +Lo
 
 ## LoRA Fine-Tuning
 
-TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter weights have been published with merged artifacts for the BF16 edge build; workflow-level quality metrics are evaluated separately after adapter merge.
+TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter is merged into the F16 edge-tier weights and is what every TenaOS deployment serves by default (`tenaos-gemma-4-E4B-it-lora-F16.gguf`, not the plain base model); workflow-level quality metrics are evaluated separately after adapter merge.
 
 **Training corpus:** 16,005 validated traces across seven task families.
 
@@ -495,8 +496,8 @@ TenaOS is a clinical decision support tool, not a diagnostic authority. All clin
 - **CIEL** — Columbia International eHealth Laboratory concept dictionary.
 - **FHIR R4** — reporting read interface through OpenMRS FHIR2.
 - **WHO and MSF clinical guidance** — local guideline evidence corpus.
-- **Gemma 4 E4B** — local multimodal generation model (text, voice, image).
-- **LoRA / PEFT** — single task-tagged adapter fine-tuned on validated TenaOS traces.
+- **Gemma 4 E4B** — local multimodal generation model (text, voice, image), served with the LoRA adapter merged in.
+- **LoRA / PEFT** — single task-tagged adapter fine-tuned on validated TenaOS traces, merged into the deployed weights.
 - **EmbedGemma 300M** — dense retrieval model for guideline chunks.
 - **SapBERT** — dense biomedical concept encoder for CIEL semantic search.
 - **Qdrant** — local vector database for dense and sparse retrieval.
@@ -514,7 +515,7 @@ TenaOS is a clinical decision support tool, not a diagnostic authority. All clin
 | [`TenaOS-Frontend/`](TenaOS-Frontend/) | React + Vite clinical workspace |
 | [`TenaOS-Backend/`](TenaOS-Backend/) | OpenMRS Reference Application 3 distribution |
 | [`TenaAgent/`](TenaAgent/) | Python agent service — prompts, tool loops, OpenMRS writers |
-| [`TenaOS-LLM/`](TenaOS-LLM/) | `llama.cpp` CUDA server (Gemma 4 E4B BF16 GGUF) |
+| [`TenaOS-LLM/`](TenaOS-LLM/) | `llama.cpp` CUDA server (Gemma 4 E4B + LoRA, merged, F16 GGUF) |
 | [`TenaOS-KnowledgeBase/`](TenaOS-KnowledgeBase/) | Qdrant + EmbedGemma retrieval daemon |
 | [`TenaOS-CIEL/`](TenaOS-CIEL/) | CIEL terminology — SQLite + FTS5 |
 | [`docker/`](docker/) | `supervisord`, internal nginx, start scripts |
@@ -527,11 +528,15 @@ Each top-level component has a README with the same
 
 | Component | Model |
 |---|---|
-| Generation | [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it) — BF16 GGUF |
-| Embeddings | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) |
+| Generation | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) — [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it) + the TenaOS task-tagged LoRA adapter, **merged**, F16 GGUF |
+| Guideline retrieval embeddings | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) |
+| CIEL retrieval embeddings | [`cambridgeltl/SapBERT-from-PubMedBERT-fulltext`](https://huggingface.co/cambridgeltl/SapBERT-from-PubMedBERT-fulltext) |
 
-Standardized on BF16 full precision. Native audio rides on Gemma 4's
-`mmproj` projector through `llama.cpp`.
+The generation model is the **merged** build, not plain base
+`google/gemma-4-E4B-it` — TenaOS always deploys base + adapter merged
+into a single F16 GGUF so the `[form]`/`[report]`/`[scribe]`/`[cds]`/`[edu]`
+task-tag routing described above is active by default. Native audio
+rides on Gemma 4's `mmproj` projector through `llama.cpp`.
 
 ## Status
 

@@ -7,11 +7,17 @@ files are large binary blobs and live outside source control.
 
 | File | Size | Source |
 | --- | --- | --- |
-| `gemma-4-E4B-it-BF16.gguf`         | ~15 GB  | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
-| `mmproj-gemma-4-E4B-it-bf16.gguf`  | ~946 MB | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
+| `tenaos-gemma-4-E4B-it-lora-F16.gguf` | ~15 GB  | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
+| `mmproj-gemma-4-E4B-it-bf16.gguf`     | ~946 MB | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) |
 
-Both files are full-precision **BF16** — no quantization on the
-production path.
+`tenaos-gemma-4-E4B-it-lora-F16.gguf` is **Gemma 4 E4B with the TenaOS
+task-tagged LoRA adapter merged in** (full precision, F16) — not the
+plain base model. TenaOS always serves this merged build so that the
+`[form]`, `[report]`, `[scribe]`, `[scribe-am]`, `[cds]`, and `[edu]`
+task-tag routing described in the README is actually active at
+runtime. The mmproj projector is unaffected by the LoRA merge (only
+attention/MLP projections were adapted) and stays the base file — this
+matches the "Merged LoRA model" example on the model card exactly.
 
 ## Easiest: use the bootstrap script
 
@@ -29,40 +35,36 @@ Docker Compose bind-mounts that directory at `/models`.
 
 ```bash
 hf download beza4588/TenaOS \
-  gemma-4-E4B-it-BF16.gguf mmproj-gemma-4-E4B-it-bf16.gguf \
+  tenaos-gemma-4-E4B-it-lora-F16.gguf mmproj-gemma-4-E4B-it-bf16.gguf \
   --local-dir ./models
 ```
 
-## Manual conversion (if you don't want to download)
+## If you want the plain base model instead (not recommended)
 
-```bash
-git clone https://github.com/ggerganov/llama.cpp.git && cd llama.cpp
-pip install -r requirements/requirements-convert_hf_to_gguf.txt
-
-hf download google/gemma-4-E4B-it --local-dir /tmp/gemma-4-E4B-it
-
-python convert_hf_to_gguf.py /tmp/gemma-4-E4B-it \
-  --outfile /var/www/TenaOS/models/gemma-4-E4B-it-BF16.gguf \
-  --outtype bf16
-```
-
-The `mmproj` projector is published alongside Gemma 4 in the official
-GGUF release; download or convert it the same way.
+The same repo also hosts the un-merged base weights
+(`gemma-4-E4B-it-BF16.gguf`) for comparison/ablation purposes. Running
+TenaOS against the base file works, but the adapter's task-tag
+behavior — the actual clinical-workflow tuning this project is built
+around — will not be active. Building the merged GGUF yourself from
+scratch requires merging `adapter/adapter_model.safetensors` into
+`google/gemma-4-E4B-it` with PEFT before GGUF conversion; downloading
+the pre-merged file above is far simpler and is what every documented
+TenaOS deployment path expects.
 
 ## Verification
 
 ```bash
 ls -lh models/
-file models/gemma-4-E4B-it-BF16.gguf  # must start with "GGUF"
+file models/tenaos-gemma-4-E4B-it-lora-F16.gguf  # must start with "GGUF"
 ```
 
 `TenaOS-LLM` refuses to start if either file is missing — the container
-entrypoint checks for `/models/gemma-4-E4B-it-BF16.gguf` and aborts
-loudly if it isn't there.
+entrypoint checks for `/models/tenaos-gemma-4-E4B-it-lora-F16.gguf` and
+aborts loudly if it isn't there.
 
 ## What this directory does NOT contain
 
 | Artifact | Why removed |
 | --- | --- |
-| `gemma-4-E4B-it-Q8_0.gguf`   | Quantized comparison baseline — public release standardizes on BF16 |
+| `gemma-4-E4B-it-Q8_0.gguf`   | Quantized comparison baseline — public release standardizes on the merged F16 build |
 | `gemma-4-E4B-it.litertlm`    | LiteRT-LM runtime removed |
