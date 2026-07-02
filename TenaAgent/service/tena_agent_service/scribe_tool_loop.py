@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import json
 import logging
+import copy
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Protocol
 
-from .agent_prompts import scribe_system
+from .agent_prompts import scribe_system, tool_description
 from .insight_traces import InsightTraceStore
 from .scribe import format_subjective_sentence, parse_scribe_response, resolve_ciel_from_hint
 
@@ -227,9 +228,6 @@ SCRIBE_OPENAI_TOOLS: list[dict[str, Any]] = [
 ]
 
 
-_SCRIBE_SYSTEM_PROMPT = scribe_system()
-
-
 def resolve_scribe_result(result: dict[str, Any], ciel: CielLike) -> dict[str, Any]:
     """Resolve and validate parsed scribe output into UI response rows."""
     soap = _normalise_soap(result.get("soap") or {})
@@ -407,7 +405,7 @@ class SoapScribeToolLoop:
             {"hasPatientContext": bool(patient_summary), "noteLength": len(note_text)},
         ))
         messages = [
-            {"role": "system", "content": _SCRIBE_SYSTEM_PROMPT},
+            {"role": "system", "content": scribe_system()},
             {"role": "user", "content": _scribe_user_prompt(note_text, patient_summary)},
         ]
         search_count = 0
@@ -419,7 +417,7 @@ class SoapScribeToolLoop:
                 messages,
                 temperature=0.0,
                 max_tokens=1800 if force_finalize else 1100,
-                tools=SCRIBE_OPENAI_TOOLS,
+                tools=_scribe_openai_tools(),
                 tool_choice=(
                     {"type": "function", "function": {"name": "finalize_soap_note"}}
                     if force_finalize
@@ -571,6 +569,25 @@ class SoapScribeToolLoop:
             except Exception as exc:
                 return {"error": f"{type(exc).__name__}: {exc}"}
         return {"error": f"Unknown tool: {name}"}
+
+
+def _scribe_openai_tools() -> list[dict[str, Any]]:
+    """Return scribe tool schemas with active prompt-overlay descriptions.
+
+    The base schemas stay in code because they define the contract. Descriptions
+    are loaded dynamically so GEPA prompt overlays and promoted optimized
+    descriptions affect the live scribe path without process restarts.
+    """
+    tools = copy.deepcopy(SCRIBE_OPENAI_TOOLS)
+    for tool in tools:
+        function = tool.get("function") or {}
+        name = str(function.get("name") or "")
+        if not name:
+            continue
+        description = tool_description("scribe", name)
+        if description:
+            function["description"] = description
+    return tools
 
 
 def _candidate_search(
@@ -869,7 +886,7 @@ def _extract_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
             })
 
     content = str(message.get("content") or "")
-    for index, match in enumerate(re.finditer(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", content, re.DOTALL)):
+    for index, match in enumerate(re.finditer(r"<(?:tool_call|tena_call)>\s*(\{.*?\})\s*</(?:tool_call|tena_call)>", content, re.DOTALL)):
         try:
             payload = json.loads(match.group(1))
         except Exception:
@@ -898,7 +915,7 @@ def _assistant_message_for_tool_calls(message: dict[str, Any], tool_calls: list[
     return {
         "role": "assistant",
         "content": "\n".join(
-            f"<tool_call>{json.dumps({'name': c.get('name'), 'arguments': c.get('arguments')})}</tool_call>"
+            f"<tena_call>{json.dumps({'name': c.get('name'), 'arguments': c.get('arguments')})}</tena_call>"
             for c in tool_calls
         ),
     }

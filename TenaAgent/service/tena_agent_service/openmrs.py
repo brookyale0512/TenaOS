@@ -361,8 +361,8 @@ class OpenMrsClient:
 
 
 def _basic_auth_from_env() -> str | None:
-    username = os.getenv("OPENMRS_USERNAME")
-    password = os.getenv("OPENMRS_PASSWORD")
+    username = os.getenv("OPENMRS_USERNAME") or os.getenv("OPENMRS_SERVICE_USER")
+    password = os.getenv("OPENMRS_PASSWORD") or os.getenv("OPENMRS_SERVICE_PASSWORD")
     if not username or not password:
         return None
     token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")

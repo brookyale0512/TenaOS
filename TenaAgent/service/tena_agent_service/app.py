@@ -13,8 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
+import urllib.request
 from urllib.error import HTTPError
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from .ciel import CielClient
 from .config import Settings
@@ -32,9 +33,9 @@ from .report_conversation import (
     ReportConversationDriver,
 )
 from .report_drafts import ReportDraft, ReportDraftNotFoundError, ReportDraftStore
-from .tool_loop import KbAgentLoop, KbGuidelinesClient
+from .tool_loop import KbAgentLoop, KbCielClient, KbGuidelinesClient
 from .material_loop import PatientMaterialLoop
-from .llm_client import LlmClient
+from .llm_client import LlmClient, LlmStatus
 from .llm_backend import make_llm_client
 from .routes.deps import _evict_old_traces
 
@@ -47,6 +48,12 @@ DEFAULT_FORM_ENCOUNTER_TYPE_UUID = os.getenv("FORM_DEFAULT_ENCOUNTER_TYPE_UUID")
 _DRAFT_STORE: FormDraftStore | None = None
 _CDS_TRACE_STORE: InsightTraceStore | None = None
 _MATERIAL_TRACE_STORE: InsightTraceStore | None = None
+_STANDARD_LOG_RECORD_KEYS = set(logging.makeLogRecord({}).__dict__) | {
+    "message",
+    "asctime",
+    "exc_text",
+    "stack_info",
+}
 
 
 class _JsonFormatter(logging.Formatter):
@@ -61,9 +68,7 @@ class _JsonFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
-        extra_keys = set(record.__dict__) - logging.LogRecord.__dict__.keys() - {
-            "message", "asctime", "args", "exc_info", "exc_text", "stack_info",
-        }
+        extra_keys = set(record.__dict__) - _STANDARD_LOG_RECORD_KEYS
         for key in extra_keys:
             payload[key] = getattr(record, key)
         return json.dumps(payload, default=str)
@@ -122,6 +127,109 @@ def _get_material_trace_store(settings: Settings) -> InsightTraceStore:
     return _MATERIAL_TRACE_STORE
 
 
+# Health is polled frequently by the frontend; cache a healthy result briefly so
+# the probes don't hammer (or queue behind) a busy llama-server, and remember the
+# last time the LLM answered so a transient probe failure during an in-flight
+# generation doesn't flip the whole service to "offline".
+_HEALTH_CACHE: dict[str, Any] = {"payload": None, "status": None, "ts": 0.0}
+_LLM_LAST_OK_TS: dict[str, float] = {"ts": 0.0}
+_HEALTH_CACHE_TTL_SECONDS = 5.0
+_LLM_HEALTH_GRACE_SECONDS = 120.0
+
+
+def _build_health_response(settings: Settings) -> tuple[dict[str, Any], HTTPStatus]:
+    """Return a health payload whose HTTP status matches demo readiness."""
+    now = time.monotonic()
+    cached = _HEALTH_CACHE
+    if (
+        cached["payload"] is not None
+        and cached["status"] == HTTPStatus.OK
+        and (now - float(cached["ts"])) < _HEALTH_CACHE_TTL_SECONDS
+    ):
+        return cached["payload"], cached["status"]
+
+    llm_status = make_llm_client(settings).health()
+    ciel_status = CielClient(settings).availability_detail()
+    kb_status = KbGuidelinesClient(base_url=settings.kb_guidelines_url).health()
+    # kb-ciel is reported but not required: when it is down, CIEL discovery
+    # transparently falls back to local SQLite FTS5, so the agent stays usable.
+    kb_ciel_status = KbCielClient(base_url=settings.kb_ciel_url).health()
+
+    llm_probe_ok = bool(llm_status.healthy)
+    if llm_probe_ok:
+        _LLM_LAST_OK_TS["ts"] = now
+        llm_ok = True
+    else:
+        # Tolerate a transient probe failure (e.g. the model is mid-generation
+        # and /models is queued) if the LLM answered within the grace window.
+        within_grace = (now - _LLM_LAST_OK_TS["ts"]) < _LLM_HEALTH_GRACE_SECONDS
+        llm_ok = bool(_LLM_LAST_OK_TS["ts"]) and within_grace
+        if llm_ok:
+            llm_status = LlmStatus(
+                True,
+                llm_status.base_url,
+                llm_status.model,
+                "LLM busy; reachable within grace window",
+            )
+    ciel_ok = bool(ciel_status.get("available"))
+    kb_ok = bool(kb_status.get("healthy"))
+    ok = llm_ok and ciel_ok and kb_ok
+
+    payload = {
+        "ok": ok,
+        "service": "tena-agent",
+        "required": {
+            "llm": llm_ok,
+            "ciel": ciel_ok,
+            "kb": kb_ok,
+        },
+        "llm": llm_status.to_dict(),
+        "ciel": ciel_status,
+        "kb": {
+            **kb_status,
+            "collection": "who_msf_guidelines",
+        },
+        "kbCiel": {
+            **kb_ciel_status,
+            "collection": "ciel_concepts",
+            "required": False,
+        },
+    }
+    status = HTTPStatus.OK if ok else HTTPStatus.SERVICE_UNAVAILABLE
+    _HEALTH_CACHE.update({"payload": payload, "status": status, "ts": now})
+    return payload, status
+
+
+def _check_openmrs_session(
+    settings: Settings,
+    *,
+    authorization: str | None,
+    cookie: str | None,
+) -> tuple[bool, str, HTTPStatus]:
+    if not authorization and not cookie:
+        return False, "missing OpenMRS credentials", HTTPStatus.UNAUTHORIZED
+
+    headers = {"Accept": "application/json"}
+    if authorization:
+        headers["Authorization"] = authorization
+    if cookie:
+        headers["Cookie"] = cookie
+    url = f"{settings.openmrs_rest_base_url}/session?{urlencode({'v': 'custom:(authenticated)'})}"
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=min(settings.request_timeout_seconds, 5)) as response:
+            body = json.loads(response.read().decode("utf-8"))
+            if bool(body.get("authenticated")):
+                return True, "authenticated", HTTPStatus.OK
+            return False, "OpenMRS session is not authenticated", HTTPStatus.UNAUTHORIZED
+    except HTTPError as exc:
+        if exc.code in {401, 403}:
+            return False, f"OpenMRS rejected session check with HTTP {exc.code}", HTTPStatus.UNAUTHORIZED
+        return False, f"OpenMRS session check failed with HTTP {exc.code}", HTTPStatus.SERVICE_UNAVAILABLE
+    except Exception as exc:
+        return False, f"OpenMRS session check failed: {exc}", HTTPStatus.SERVICE_UNAVAILABLE
+
+
 from .routes.scribe_routes import ScribeRoutesMixin
 from .routes.report_routes import (
     ReportRoutesMixin,
@@ -151,6 +259,8 @@ class TenaAgentRequestHandler(
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        if not self._authorize_agent_request(path):
+            return
         if path == "/health":
             self._handle_health()
             return
@@ -213,6 +323,8 @@ class TenaAgentRequestHandler(
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        if not self._authorize_agent_request(path):
+            return
         if path.startswith("/insights/patient/"):
             patient_uuid = path.rsplit("/", 1)[-1]
             self._handle_post_insight(patient_uuid)
@@ -290,6 +402,8 @@ class TenaAgentRequestHandler(
     def do_DELETE(self) -> None:
         parsed = urlparse(self.path)
         path = parsed.path
+        if not self._authorize_agent_request(path):
+            return
         if path.startswith("/reports/drafts/"):
             draft_id = path.split("/")[3]
             if draft_id:
@@ -300,20 +414,23 @@ class TenaAgentRequestHandler(
     # -- /health, /insights ----
 
     def _handle_health(self) -> None:
-        llm_status = make_llm_client(self.settings).health()
-        ciel_status = CielClient(self.settings).availability_detail()
-        self._send_json(
-            {
-                "ok": True,
-                "service": "tena-agent",
-                "llm": llm_status.to_dict(),
-                "ciel": ciel_status,
-                "kb": {
-                    "url": self.settings.kb_guidelines_url,
-                    "collection": "who_msf_guidelines",
-                },
-            },
+        payload, status = _build_health_response(self.settings)
+        self._send_json(payload, status)
+
+    def _authorize_agent_request(self, path: str) -> bool:
+        if path == "/health":
+            return True
+        if not getattr(self.settings, "require_openmrs_session", False):
+            return True
+        authenticated, detail, status = _check_openmrs_session(
+            self.settings,
+            authorization=self.headers.get("Authorization"),
+            cookie=self.headers.get("Cookie"),
         )
+        if authenticated:
+            return True
+        self._send_json({"error": "OpenMRS session required", "detail": detail}, status)
+        return False
 
     def _handle_insight_events(self, trace_id: str) -> None:
         trace = TRACES.get(trace_id)
@@ -603,11 +720,11 @@ class TenaAgentRequestHandler(
         except DraftNotFoundError:
             self._send_json({"error": "Draft not found"}, HTTPStatus.NOT_FOUND)
             return
-        if "text/event-stream" in (self.headers.get("Accept") or ""):
-            self._send_draft_event_stream(draft_id, store)
-            return
         params = parse_qs(parsed.query)
         since = (params.get("since") or [None])[0]
+        if "text/event-stream" in (self.headers.get("Accept") or ""):
+            self._send_draft_event_stream(draft_id, store, since=since)
+            return
         events = store.list_events(draft_id, since=since)
         self._send_json({"draftId": draft_id, "events": [event.to_dict() for event in events]})
 
@@ -745,14 +862,14 @@ class TenaAgentRequestHandler(
                 break
             time.sleep(0.4)
 
-    def _send_draft_event_stream(self, draft_id: str, store: FormDraftStore) -> None:
+    def _send_draft_event_stream(self, draft_id: str, store: FormDraftStore, *, since: str | None = None) -> None:
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self._add_cors_headers()
         self.end_headers()
-        last_seen: str | None = None
+        last_seen: str | None = since
         last_status: str | None = None
         idle_iterations = 0
         max_idle_iterations = 600  # ~4 minutes at 0.4s poll

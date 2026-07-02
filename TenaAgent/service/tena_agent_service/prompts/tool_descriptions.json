@@ -381,7 +381,8 @@
                     "type": "string"
                   },
                   "label": {
-                    "type": "string"
+                    "type": "string",
+                    "description": "For add_section/rename_section: the human-readable section title. For add_field: OMIT this; the form uses the CIEL concept's own display name. Only set it to rephrase into other human words (e.g. 'Current weight'); never a snake_case identifier ('cough_field') or the concept id."
                   },
                   "conceptId": {
                     "type": "string"

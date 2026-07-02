@@ -63,6 +63,7 @@ def _bundle(
 class FakeCielClient:
     def __init__(self, bundles: dict[str, dict[str, Any]] | None = None) -> None:
         self.bundles = bundles or {}
+        self.search_hits: dict[str, list[Any]] = {}
 
     def get_concept_bundle(self, concept_id: str) -> dict[str, Any]:
         if concept_id not in self.bundles:
@@ -70,10 +71,10 @@ class FakeCielClient:
         return self.bundles[concept_id]
 
     def search_form_seeds(self, query: str, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
+        return self.search_hits.get(query, [])
 
     def search_concepts(self, query: str, *args: Any, **kwargs: Any) -> list[Any]:
-        return []
+        return self.search_hits.get(query, [])
 
     def expand_seed(self, concept_id: str, *, depth: int = 2, allow_retired: bool = False) -> dict[str, Any]:
         return self.get_concept_bundle(concept_id)
@@ -173,6 +174,8 @@ class SpecValidationTests(unittest.TestCase):
                 "1487": _bundle("1487", "Cough", datatype="Boolean"),
                 "5089": _bundle("5089", "Weight", datatype="Numeric"),
                 "1063": _bundle("1063", "HIV", datatype="Coded", answers=[{"concept_id": "703", "display_name": "Positive"}]),
+                "1169": _bundle("1169", "Falciparum Malaria", datatype="N/A", concept_class="Diagnosis"),
+                "1138": _bundle("1138", "Plasmodium falciparum malaria with cerebral complications", datatype="N/A", concept_class="Diagnosis"),
                 "131602": _bundle("131602", "Otalgia", datatype="N/A", concept_class="Diagnosis"),
                 "1366": _bundle("1366", "Malaria smear, qualitative", datatype="Coded", concept_class="Test", answers=[{"concept_id": "1065", "display_name": "Yes"}]),
             }
@@ -227,6 +230,17 @@ class SpecValidationTests(unittest.TestCase):
         self.assertFalse(report.ok)
         self.assertTrue(any("valueConceptId" in i.path for i in report.issues))
 
+    def test_coded_value_must_be_answer(self) -> None:
+        spec = ReportSpec(
+            report_type="count",
+            filters=[
+                ReportFilter(filter_id="f1", concept_id="1063", label="HIV", filter_mode="value_concept", value_concept_id="1065"),
+            ],
+        )
+        report = validate_spec(spec, self.ciel)
+        self.assertFalse(report.ok)
+        self.assertTrue(any(i.code == "coded_value_not_answer" for i in report.issues))
+
     def test_diagnosis_condition_filter_does_not_require_value(self) -> None:
         spec = ReportSpec(
             report_type="count",
@@ -239,7 +253,7 @@ class SpecValidationTests(unittest.TestCase):
         compiled = spec_to_query(spec, self.ciel, reference_date=date(2026, 5, 15))
         self.assertEqual(compiled.filters[0].filter_mode, "condition")
 
-    def test_malaria_diagnosis_alias_compiles_to_condition_code(self) -> None:
+    def test_malaria_lab_concept_is_not_remapped_by_label(self) -> None:
         spec = ReportSpec(
             report_type="count",
             filters=[
@@ -255,8 +269,8 @@ class SpecValidationTests(unittest.TestCase):
         report = validate_spec(spec, self.ciel)
         self.assertTrue(report.ok, [i.message for i in report.issues])
         compiled = spec_to_query(spec, self.ciel, reference_date=date(2026, 5, 15))
-        self.assertEqual(compiled.filters[0].filter_mode, "condition")
-        self.assertEqual(compiled.filters[0].code_uuid, openmrs_uuid_for_concept_id("116128"))
+        self.assertEqual(compiled.filters[0].filter_mode, "value_concept")
+        self.assertEqual(compiled.filters[0].code_uuid, openmrs_uuid_for_concept_id("1366"))
 
     def test_numeric_requires_operator_and_threshold(self) -> None:
         spec = ReportSpec(
@@ -526,6 +540,8 @@ class ReportToolLoopTests(unittest.TestCase):
             "1487": _bundle("1487", "Cough", datatype="Boolean"),
             "5089": _bundle("5089", "Weight", datatype="Numeric"),
             "1063": _bundle("1063", "HIV", datatype="Coded", answers=[{"concept_id": "703", "display_name": "Positive"}]),
+            "1169": _bundle("1169", "Falciparum Malaria", datatype="N/A", concept_class="Diagnosis"),
+            "1138": _bundle("1138", "Plasmodium falciparum malaria with cerebral complications", datatype="N/A", concept_class="Diagnosis"),
             "1065": _bundle("1065", "Yes", datatype="N/A", concept_class="Misc"),
             "1066": _bundle("1066", "No", datatype="N/A", concept_class="Misc"),
             "703": _bundle("703", "Positive", datatype="N/A", concept_class="Misc"),
@@ -573,6 +589,67 @@ class ReportToolLoopTests(unittest.TestCase):
         self.assertEqual(result["result"]["total"], 3)
         self.assertEqual(result["result"]["visualization"]["template"], "filter_bar")
         self.assertEqual(result["result"]["visualization"]["data"]["bars"][0]["value"], 3)
+
+    def test_spec_mutation_clears_stale_query_and_result(self) -> None:
+        draft_id = self._new_draft()
+        self.loop.update_report_draft(
+            draft_id,
+            [
+                {"op": "set_report_type", "reportType": "count"},
+                {"op": "add_filter", "conceptId": "1479", "valueBool": True, "label": "Night sweats"},
+            ],
+        )
+        self.reader.observation_entries = {
+            openmrs_uuid_for_concept_id("1479"): [_obs_entry("p1", valueBoolean=True)]
+        }
+        self.loop.build_report_query(draft_id)
+        self.loop.run_report(draft_id)
+        self.assertIsNotNone(self.store.get_draft(draft_id).last_query)
+        self.assertIsNotNone(self.store.get_draft(draft_id).last_result)
+
+        self.loop.update_report_draft(
+            draft_id,
+            [{"op": "set_date_range", "text": "around christmas time"}],
+        )
+        draft = self.store.get_draft(draft_id)
+        self.assertIsNone(draft.last_query)
+        self.assertIsNone(draft.last_result)
+        self.assertIsNone(draft.last_run_at)
+
+    def test_missing_op_report_operations_are_normalized(self) -> None:
+        draft_id = self._new_draft()
+        result = self.loop.update_report_draft(
+            draft_id,
+            [
+                {"reportType": "pivot"},
+                {"text": "last 6 months"},
+                {"joinMode": "and"},
+                {"template": "time_series_line", "title": "TB diagnosis trend"},
+                {"conceptId": "1479", "valueBool": True, "label": "Night sweats"},
+                {"dimension": "date_month"},
+            ],
+        )
+
+        self.assertEqual(result["warnings"], [])
+        self.assertEqual(len(result["applied"]), 6)
+        draft = self.store.get_draft(draft_id)
+        self.assertEqual(draft.spec["reportType"], "pivot")
+        self.assertEqual(draft.spec["dateRangeLabel"], "last 6 months")
+        self.assertEqual(len(draft.spec["filters"]), 1)
+        self.assertEqual(draft.spec["groupBy"][0]["dimension"], "date_month")
+        self.assertEqual(draft.spec["visualization"]["template"], "time_series_line")
+
+        events = self.store.list_events(draft_id)
+        self.assertTrue(any(e.operation == "operation_normalized" for e in events))
+
+    def test_set_date_range_accepts_date_range_label_alias(self) -> None:
+        draft_id = self._new_draft()
+        result = self.loop.update_report_draft(
+            draft_id,
+            [{"op": "set_date_range", "dateRangeLabel": "last 12 months"}],
+        )
+        self.assertFalse(result["warnings"])
+        self.assertEqual(self.store.get_draft(draft_id).spec["dateRangeLabel"], "last 12 months")
 
     def test_cohort_with_demographics(self) -> None:
         draft_id = self._new_draft()
@@ -624,7 +701,15 @@ class ReportToolLoopTests(unittest.TestCase):
         self.assertAlmostEqual(result["result"]["rate"], 40.0, places=2)
         chart = result["result"]["visualization"]
         self.assertEqual(chart["template"], "indicator_rate")
-        self.assertEqual(chart["data"]["bars"], [{"label": "Numerator", "value": 2}, {"label": "Denominator", "value": 5}])
+        self.assertEqual(
+            chart["data"]["bars"],
+            [
+                {"label": "Cough", "value": 2},
+                {"label": "Other patients (Encounters in range)", "value": 3},
+            ],
+        )
+        self.assertEqual(chart["data"]["numeratorLabel"], "Cough")
+        self.assertEqual(chart["data"]["denominatorLabel"], "Encounters in range")
 
     def test_pivot_by_sex_and_age(self) -> None:
         draft_id = self._new_draft()
@@ -704,7 +789,7 @@ class ReportToolLoopTests(unittest.TestCase):
         chart = result["result"]["visualization"]
         self.assertEqual(chart["data"]["rows"][2]["values"][0]["value"], 1)
 
-    def test_pivot_by_month_defaults_to_time_series_bar(self) -> None:
+    def test_pivot_by_month_defaults_to_time_series_line(self) -> None:
         draft_id = self._new_draft()
         self.loop.update_report_draft(
             draft_id,
@@ -724,7 +809,7 @@ class ReportToolLoopTests(unittest.TestCase):
         result = self.loop.run_report(draft_id)
         self.assertTrue(result["success"])
         chart = result["result"]["visualization"]
-        self.assertEqual(chart["template"], "time_series_bar")
+        self.assertEqual(chart["template"], "time_series_line")
         self.assertEqual(chart["data"]["points"], [{"period": "2026-01", "value": 0}, {"period": "2026-02", "value": 1}])
 
     def test_indicator_rate_over_time(self) -> None:
@@ -770,6 +855,20 @@ class ReportToolLoopTests(unittest.TestCase):
         self.assertEqual(draft.spec["visualization"]["template"], "pivot_heatmap")
         self.assertEqual(draft.spec["visualization"]["title"], "Cases by age and sex")
 
+    def test_set_visualization_infers_line_graph_template(self) -> None:
+        draft_id = self._new_draft()
+        result = self.loop.update_report_draft(
+            draft_id,
+            [
+                {"op": "set_report_type", "reportType": "pivot"},
+                {"op": "add_group_by", "dimension": "date_month"},
+                {"op": "set_visualization", "visualization": "line graph", "title": "Malaria month over month"},
+            ],
+        )
+        self.assertFalse(result["warnings"])
+        draft = self.store.get_draft(draft_id)
+        self.assertEqual(draft.spec["visualization"]["template"], "time_series_line")
+
     def test_set_visualization_op_falls_back_on_incompatible_template(self) -> None:
         draft_id = self._new_draft()
         result = self.loop.update_report_draft(
@@ -798,6 +897,21 @@ class ReportToolLoopTests(unittest.TestCase):
         draft = self.store.get_draft(draft_id)
         self.assertEqual([g["dimension"] for g in draft.spec["groupBy"]], ["sex", "age_group"])
 
+    def test_grouped_count_is_normalized_to_pivot(self) -> None:
+        draft_id = self._new_draft()
+        self.loop.update_report_draft(
+            draft_id,
+            [
+                {"op": "set_report_type", "reportType": "count"},
+                {"op": "add_filter", "conceptId": "1487", "valueBool": True, "label": "Cough"},
+                {"op": "add_group_by", "dimension": "sex"},
+                {"op": "add_group_by", "dimension": "age_group"},
+            ],
+        )
+        draft = self.store.get_draft(draft_id)
+        self.assertEqual(draft.spec["reportType"], "pivot")
+        self.assertEqual(draft.report_type, "pivot")
+
     def test_temporal_group_by_dedupes_to_month_and_sex(self) -> None:
         draft_id = self._new_draft()
         self.loop.update_report_draft(
@@ -820,6 +934,78 @@ class ReportToolLoopTests(unittest.TestCase):
         )
         applied = [a for a in result["applied"] if a["op"] == "add_filter"]
         self.assertEqual(applied[0]["conceptId"], "1479")
+
+    def test_add_filter_accepts_related_concept_ids(self) -> None:
+        draft_id = self._new_draft()
+        result = self.loop.update_report_draft(
+            draft_id,
+            [
+                {
+                    "op": "add_filter",
+                    "conceptIds": ["1169", "1138"],
+                    "label": "Malaria diagnosis family",
+                }
+            ],
+        )
+        self.assertFalse(result["warnings"])
+        draft = self.store.get_draft(draft_id)
+        self.assertEqual(draft.spec["filters"][0]["conceptId"], "1169")
+        self.assertEqual(draft.spec["filters"][0]["conceptIds"], ["1169", "1138"])
+        build = self.loop.build_report_query(draft_id)
+        compiled_filter = build["compiled"]["filters"][0]
+        self.assertEqual(compiled_filter["codeUuid"], "1169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        self.assertIn("1138AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", compiled_filter["codeUuids"])
+
+    def test_broad_diagnosis_search_returns_larger_candidate_set(self) -> None:
+        from tena_agent_service.ciel import SeedHit
+
+        self.ciel.search_hits["Malaria diagnosis"] = [
+            SeedHit(
+                concept_id=str(i),
+                display_name=f"Malaria diagnosis variant {i}",
+                concept_class="Diagnosis",
+                datatype="N/A",
+                retired=False,
+                answer_count=0,
+                set_member_count=0,
+                score=1.0 / i,
+            )
+            for i in range(1, 19)
+        ]
+        draft_id = self._new_draft()
+        result = self.loop.search_ciel_seeds(draft_id, query="Malaria diagnosis", limit=10)
+        self.assertGreaterEqual(len(result["seeds"]), 18)
+
+    def test_related_ciel_concepts_search_returns_diagnosis_candidates(self) -> None:
+        from tena_agent_service.ciel import SeedHit
+
+        self.ciel.search_hits["malaria"] = [
+            SeedHit(
+                concept_id="118353",
+                display_name="Falciparum malaria",
+                concept_class="Diagnosis",
+                datatype="N/A",
+                retired=False,
+                answer_count=0,
+                set_member_count=0,
+                score=0.8,
+            ),
+            SeedHit(
+                concept_id="5089",
+                display_name="Weight",
+                concept_class="Finding",
+                datatype="Numeric",
+                retired=False,
+                answer_count=0,
+                set_member_count=0,
+                score=0.9,
+            ),
+        ]
+        draft_id = self._new_draft()
+        result = self.loop.search_related_ciel_concepts(draft_id, query="malaria diagnosis", limit=20)
+        ids = [item["conceptId"] for item in result["concepts"]]
+        self.assertIn("118353", ids)
+        self.assertNotIn("5089", ids)
 
     def test_normalize_concept_id_helper(self) -> None:
         self.assertEqual(_normalize_concept_id("5089"), ("5089", False))

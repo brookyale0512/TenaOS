@@ -103,6 +103,36 @@ class KbGuidelinesClient:
 
     def __init__(self, base_url: str = KB_GUIDELINES_URL) -> None:
         self.base_url = base_url.rstrip("/")
+        self.shared_secret = os.environ.get("TENAOS_KB_SHARED_SECRET", "").strip()
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.shared_secret:
+            headers["X-TenaOS-KB-Secret"] = self.shared_secret
+        return headers
+
+    def health(self, timeout: float = 3.0) -> dict[str, Any]:
+        req = urllib.request.Request(f"{self.base_url}/health", headers=self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                body = json.loads(raw) if raw else {}
+                healthy = 200 <= int(getattr(resp, "status", 200)) < 300 and bool(body.get("ok"))
+                return {
+                    "healthy": healthy,
+                    "baseUrl": self.base_url,
+                    "status": int(getattr(resp, "status", 200)),
+                    "message": "KB endpoint is healthy" if healthy else "KB endpoint returned an unhealthy response",
+                    "detail": body,
+                }
+        except Exception as exc:
+            return {
+                "healthy": False,
+                "baseUrl": self.base_url,
+                "status": None,
+                "message": str(exc),
+                "detail": None,
+            }
 
     def search(
         self,
@@ -121,16 +151,125 @@ class KbGuidelinesClient:
         req = urllib.request.Request(
             f"{self.base_url}/search",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={**self._headers(), "Content-Type": "application/json"},
+            method="POST",
+        )
+        return self.search_with_meta(query, k=k, search_mode=search_mode, snippet_chars=snippet_chars).get("hits") or []
+
+    def search_with_meta(
+        self,
+        query: str,
+        k: int = 5,
+        search_mode: str = "rrf",
+        snippet_chars: int = 1200,
+    ) -> dict[str, Any]:
+        """Return the full retrieval envelope: hits + quality_flags + errors.
+
+        Research/CDS callers can react to retrieval-quality signals (e.g.
+        ``off_condition_top``/``low_confidence``) instead of only seeing hits.
+        On any transport error returns an empty-but-well-formed envelope.
+        """
+        payload = json.dumps({
+            "query": query,
+            "k": min(max(k, 1), 10),
+            "search_mode": search_mode,
+            "snippet_chars": snippet_chars,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/search",
+            data=payload,
+            headers={**self._headers(), "Content-Type": "application/json"},
             method="POST",
         )
         try:
             with urllib.request.urlopen(req, timeout=_KB_TIMEOUT) as resp:
                 body = json.loads(resp.read().decode("utf-8"))
-                return body.get("hits") or []
+                return {
+                    "hits": body.get("hits") or [],
+                    "quality_flags": body.get("quality_flags") or body.get("qualityFlags") or [],
+                    "errors": body.get("errors") or [],
+                }
         except Exception as exc:
             log.warning("KB search failed (query=%r): %s", query, exc)
-            return []
+            return {"hits": [], "quality_flags": [], "errors": [str(exc)]}
+
+
+KB_CIEL_URL = os.environ.get("TENAOS_KB_CIEL_URL", "http://localhost:4277")
+
+
+class KbCielClient:
+    """Thin HTTP client over the ciel_concepts KB daemon (port 4277).
+
+    This is the semantic-discovery half of the form/report CIEL flow: given a
+    plain-language clinical phrase, return the CIEL concept ids that best match
+    (SapBERT + BM25 hybrid). Exact bundle/code resolution stays in the local
+    CIEL SQLite via ``CielClient``/``CielSearchService._hydrate_hits``.
+    """
+
+    def __init__(self, base_url: str = KB_CIEL_URL) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.shared_secret = os.environ.get("TENAOS_KB_SHARED_SECRET", "").strip()
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        if self.shared_secret:
+            headers["X-TenaOS-KB-Secret"] = self.shared_secret
+        return headers
+
+    def health(self, timeout: float = 3.0) -> dict[str, Any]:
+        req = urllib.request.Request(f"{self.base_url}/health", headers=self._headers())
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                body = json.loads(raw) if raw else {}
+                healthy = 200 <= int(getattr(resp, "status", 200)) < 300 and bool(body.get("ok"))
+                return {
+                    "healthy": healthy,
+                    "baseUrl": self.base_url,
+                    "status": int(getattr(resp, "status", 200)),
+                    "message": "kb-ciel endpoint is healthy" if healthy else "kb-ciel endpoint returned an unhealthy response",
+                    "detail": body,
+                }
+        except Exception as exc:
+            return {
+                "healthy": False,
+                "baseUrl": self.base_url,
+                "status": None,
+                "message": str(exc),
+                "detail": None,
+            }
+
+    def search(
+        self,
+        query: str,
+        k: int = 10,
+        *,
+        concept_classes: list[str] | None = None,
+        datatypes: list[str] | None = None,
+        include_retired: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return up to k concept hits; empty list on any error.
+
+        Each hit: {concept_id, score, display_name, concept_class, datatype,
+        retired, answer_count, set_member_count}.
+        """
+        request_body: dict[str, Any] = {"query": query, "k": min(max(k, 1), 50)}
+        if concept_classes:
+            request_body["concept_classes"] = list(concept_classes)
+        if datatypes:
+            request_body["datatypes"] = list(datatypes)
+        if include_retired:
+            request_body["include_retired"] = True
+        payload = json.dumps(request_body).encode("utf-8")
+        req = urllib.request.Request(
+            f"{self.base_url}/search",
+            data=payload,
+            headers={**self._headers(), "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=_KB_TIMEOUT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            return body.get("hits") or []
 
 
 # ---------------------------------------------------------------------------
@@ -174,6 +313,159 @@ SEARCH_ONLY_SCHEMAS = [
 
 # Minimum KB searches before triggering the format call (system prompt: 3-5).
 _MIN_SEARCHES = 4
+
+
+def _first_balanced_object_end(text: str) -> int | None:
+    """Return the end index (exclusive) of the first balanced ``{...}`` object."""
+    depth = 0
+    in_string = False
+    escape = False
+    for i, ch in enumerate(text or ""):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return None
+
+
+def _scan_balanced_json_objects(text: str) -> list[dict[str, Any]]:
+    """Extract top-level balanced ``{...}`` JSON objects from noisy text.
+
+    String-aware brace walker so nested objects (e.g. a tool call whose
+    ``arguments`` is itself an object) are captured whole.
+    """
+    objects: list[dict[str, Any]] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escape = False
+    for i, ch in enumerate(text or ""):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\" and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                try:
+                    parsed = json.loads(text[start : i + 1])
+                    if isinstance(parsed, dict):
+                        objects.append(parsed)
+                except Exception:
+                    pass
+                start = -1
+    return objects
+
+
+def _strip_tool_call_blocks(text: str) -> str:
+    """Remove tool-call wrappers/markers so the trace shows prose reasoning.
+
+    Gemma emits its tool calls as ``<tena_call>{...}</tena_call>`` text inside
+    the same content field as its chain-of-thought. Showing that raw JSON as
+    "Gemma reasoning" is noise; strip the wrappers (and any leftover bare
+    tool-call JSON object) and keep only the human-readable thinking.
+    """
+    if not text:
+        return ""
+    cleaned = re.sub(
+        r"<(?:tool_call|tena_call)>.*?</(?:tool_call|tena_call)>", "", text, flags=re.DOTALL
+    )
+    cleaned = re.sub(r"</?(?:tool_call|tena_call|think)>", "", cleaned)
+    cleaned = re.sub(r"<\|?(?:channel|im_end|end_of_turn|tool_call)\|?>", "", cleaned)
+    stripped = cleaned.strip()
+    # If what remains is just a bare tool-call JSON object, drop it entirely.
+    if stripped.startswith("{"):
+        end = _first_balanced_object_end(stripped)
+        if end is not None:
+            head = stripped[:end]
+            remainder = stripped[end:].strip()
+            try:
+                obj = json.loads(head)
+            except Exception:
+                obj = None
+            if (
+                isinstance(obj, dict)
+                and obj.get("name")
+                and ("arguments" in obj or "args" in obj)
+                and len(remainder) < 8
+            ):
+                return ""
+    return stripped
+
+
+def _extract_text_tool_calls(content: str) -> list[dict[str, Any]]:
+    """Parse ``<tena_call>/<tool_call>`` text tool calls Gemma emits when the
+    native function-call parser does not fire.
+
+    Returns OpenAI-shaped tool-call dicts so the loop can treat them exactly
+    like native calls. Handles nested ``arguments`` objects (a non-greedy
+    ``{.*?}`` would truncate them and silently drop the call).
+    """
+    if not content:
+        return []
+    candidates: list[dict[str, Any]] = []
+    for match in re.finditer(
+        r"<(?:tool_call|tena_call)>\s*(.*?)\s*</(?:tool_call|tena_call)>", content, re.DOTALL
+    ):
+        inner = match.group(1).strip()
+        try:
+            obj = json.loads(inner)
+            if isinstance(obj, dict):
+                candidates.append(obj)
+                continue
+        except Exception:
+            pass
+        candidates.extend(_scan_balanced_json_objects(inner))
+    if not candidates:
+        # Untagged bare JSON tool-call object as the whole turn.
+        candidates = _scan_balanced_json_objects(content)
+    calls: list[dict[str, Any]] = []
+    for index, obj in enumerate(candidates):
+        name = obj.get("name") or obj.get("tool") or obj.get("function")
+        if not name or not isinstance(name, str):
+            continue
+        args = obj.get("arguments")
+        if args is None:
+            args = obj.get("args") or {}
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {}
+        if not isinstance(args, dict):
+            args = {}
+        calls.append(
+            {
+                "id": f"text_tool_{index}",
+                "type": "function",
+                "function": {"name": name, "arguments": json.dumps(args)},
+            }
+        )
+    return calls
 
 # Token budget for format_cds_result — generous enough to never truncate the
 # detailed 5-section CDS report.  stream=True keeps the socket alive during
@@ -372,10 +664,23 @@ class KbAgentLoop:
                 if response:
                     assistant_msg = response.get("choices", [{}])[0].get("message", {})
                     tool_calls = assistant_msg.get("tool_calls") or []
-                    if tool_calls:
-                        tc = tool_calls[0]
-                        func = tc.get("function") or {}
-                        raw_args = func.get("arguments") or tc.get("arguments", "{}")
+                    # Gemma may emit the forced format call as <tena_call> text
+                    # rather than a native tool_call; parse that too so we don't
+                    # discard a perfectly good report and fall back to the
+                    # generic synthesis.
+                    if not tool_calls:
+                        tool_calls = _extract_text_tool_calls(assistant_msg.get("content") or "")
+                    fmt_call = next(
+                        (
+                            tc
+                            for tc in tool_calls
+                            if ((tc.get("function") or {}).get("name") or tc.get("name")) == "format_cds_result"
+                        ),
+                        tool_calls[0] if tool_calls else None,
+                    )
+                    if fmt_call:
+                        func = fmt_call.get("function") or {}
+                        raw_args = func.get("arguments") or fmt_call.get("arguments", "{}")
                         try:
                             args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
                         except json.JSONDecodeError:
@@ -412,11 +717,12 @@ class KbAgentLoop:
 
             # Capture reasoning text (most common on turn 0 — Phase-A thinking).
             reasoning = (assistant_msg.get("content") or "").strip()
-            if reasoning:
+            display_reasoning = _strip_tool_call_blocks(reasoning)
+            if display_reasoning:
                 trace.add(
                     "model_reasoning",
                     f"Gemma reasoning (step {turn + 1})",
-                    reasoning[:1500],
+                    display_reasoning[:1500],
                     {"turn": turn + 1},
                 )
                 # If the model wrote the CDS sections in its reasoning text,
@@ -438,9 +744,19 @@ class KbAgentLoop:
                         self._all_hits,
                     )
 
-            # Append the full assistant message (all tool call IDs must be
-            # present so vLLM can match them against the tool results below).
+            # Append the full assistant message so every tool call ID is
+            # available when we send the corresponding tool results below.
             tool_calls = assistant_msg.get("tool_calls") or []
+            if not tool_calls:
+                # Gemma frequently emits <tena_call>{...}</tena_call> text
+                # instead of native tool_calls; parse it so KB searches actually
+                # execute (otherwise the loop spins to "Max turns reached" with
+                # no evidence). Rebuild the assistant message with synthetic
+                # tool_calls so the tool-result transcript stays consistent.
+                text_calls = _extract_text_tool_calls(assistant_msg.get("content") or "")
+                if text_calls:
+                    tool_calls = text_calls
+                    assistant_msg = {"role": "assistant", "content": "", "tool_calls": text_calls}
             messages.append({"role": "assistant", **assistant_msg})
 
             if not tool_calls:
@@ -448,11 +764,12 @@ class KbAgentLoop:
                 if search_count < _MIN_SEARCHES:
                     messages.append({
                         "role": "user",
-                        "content": (
+                        "                        content": (
                             f"You have completed {search_count} unique KB search(es). "
                             f"Previous queries: {', '.join(sorted(searched_queries)) or 'none'}. "
-                            "Now call search_guidelines exactly once with a NEW focused query for "
-                            "the most important remaining clinical gap."
+                            "First write ONE short plain-text sentence naming the next clinical gap "
+                            "and why it matters, then call search_guidelines exactly once with a NEW "
+                            "focused query for that gap."
                         ),
                     })
                     force_next_search = True

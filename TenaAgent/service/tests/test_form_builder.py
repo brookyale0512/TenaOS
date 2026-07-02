@@ -103,6 +103,99 @@ def _bundle(
 # UUID padding
 
 
+class LabelOverrideSanitizerTests(unittest.TestCase):
+    def test_machine_identifier_labels_are_dropped(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _clean_label_override
+
+        for ident in ["cough_field", "history_tb_field", "bmi_field", "weight_loss", "hiv"]:
+            self.assertIsNone(_clean_label_override(ident), ident)
+
+    def test_human_labels_are_preserved(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _clean_label_override
+
+        self.assertEqual(_clean_label_override("Current weight"), "Current weight")
+        self.assertEqual(_clean_label_override("Body Mass Index"), "Body Mass Index")
+        # A capitalized single word is a valid display label, not an identifier.
+        self.assertEqual(_clean_label_override("Cough"), "Cough")
+        self.assertEqual(_clean_label_override("BMI"), "BMI")
+
+    def test_blank_label_inherits_display_name(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _clean_label_override
+
+        self.assertIsNone(_clean_label_override(""))
+        self.assertIsNone(_clean_label_override("   "))
+        self.assertIsNone(_clean_label_override(None))
+
+
+class SeedMergeTests(unittest.TestCase):
+    def test_unfiltered_high_score_beats_filtered_junk(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _merge_seeds_by_score
+        from tena_agent_service.ciel import SeedHit
+
+        filtered = [SeedHit(concept_id="5953", display_name="Vision difficulties",
+                            concept_class="Symptom", datatype="Boolean", retired=False,
+                            answer_count=0, set_member_count=0, score=0.5)]
+        unfiltered = [SeedHit(concept_id="133027", display_name="Night sweats",
+                              concept_class="Finding", datatype="Boolean", retired=False,
+                              answer_count=0, set_member_count=0, score=0.7)]
+        merged = _merge_seeds_by_score(filtered, unfiltered, seed_limit=5)
+        self.assertEqual(merged[0].concept_id, "133027")
+        self.assertEqual([s.concept_id for s in merged], ["133027", "5953"])
+
+    def test_dedupes_keeping_higher_score(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _merge_seeds_by_score
+        from tena_agent_service.ciel import SeedHit
+
+        a = SeedHit(concept_id="1", display_name="x", concept_class="Finding",
+                    datatype="Boolean", retired=False, answer_count=0, set_member_count=0, score=0.4)
+        b = SeedHit(concept_id="1", display_name="x", concept_class="Finding",
+                    datatype="Boolean", retired=False, answer_count=0, set_member_count=0, score=0.9)
+        merged = _merge_seeds_by_score([a], [b], seed_limit=5)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].score, 0.9)
+
+
+class OperationNormalizationTests(unittest.TestCase):
+    def test_plural_section_and_concept_ids_coerced_to_singular(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _normalize_operations
+
+        ops = _normalize_operations([
+            {"op": "add_field", "sectionIds": ["airway"], "conceptIds": ["163090"]},
+        ])
+        self.assertEqual(len(ops), 1)
+        self.assertEqual(ops[0]["sectionId"], "airway")
+        self.assertEqual(ops[0]["conceptId"], "163090")
+        self.assertNotIn("sectionIds", ops[0])
+        self.assertNotIn("conceptIds", ops[0])
+
+    def test_multi_concept_add_field_is_expanded(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _normalize_operations
+
+        ops = _normalize_operations([
+            {"op": "add_field", "sectionIds": ["abc"], "conceptIds": ["1", "2", "3"]},
+        ])
+        self.assertEqual([o["conceptId"] for o in ops], ["1", "2", "3"])
+        self.assertTrue(all(o["sectionId"] == "abc" for o in ops))
+
+    def test_reorder_ops_keep_plural_arrays(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _normalize_operations
+
+        ops = _normalize_operations([
+            {"op": "reorder_sections", "sectionIds": ["a", "b"]},
+            {"op": "reorder_fields", "sectionId": "s", "conceptIds": ["1", "2"]},
+        ])
+        self.assertEqual(ops[0]["sectionIds"], ["a", "b"])
+        self.assertEqual(ops[1]["conceptIds"], ["1", "2"])
+
+    def test_singular_form_is_untouched(self) -> None:
+        from tena_agent_service.form_builder_tool_loop import _normalize_operations
+
+        ops = _normalize_operations([
+            {"op": "add_field", "sectionId": "s", "conceptId": "9"},
+        ])
+        self.assertEqual(ops[0], {"op": "add_field", "sectionId": "s", "conceptId": "9"})
+
+
 class OpenmrsUuidPaddingTests(unittest.TestCase):
     def test_short_id_pads_to_36_chars(self) -> None:
         self.assertEqual(openmrs_uuid_for_concept_id("5089"), "5089" + "A" * 32)

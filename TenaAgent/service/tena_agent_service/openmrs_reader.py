@@ -46,9 +46,20 @@ ProgressCallback = Callable[[str, dict[str, Any]], None]
 
 
 def _basic_auth_from_env() -> str | None:
-    """Same fallback the writer uses — pull admin creds from env vars."""
-    username = os.getenv("OPENMRS_USERNAME")
-    password = os.getenv("OPENMRS_PASSWORD")
+    """Pull admin creds from env vars.
+
+    Checks both the legacy OPENMRS_USERNAME/OPENMRS_PASSWORD pair and the
+    canonical OPENMRS_SERVICE_USER/OPENMRS_SERVICE_PASSWORD pair used by the
+    all-in-one container so that whichever is set the reader can authenticate.
+    """
+    username = (
+        os.getenv("OPENMRS_USERNAME")
+        or os.getenv("OPENMRS_SERVICE_USER")
+    )
+    password = (
+        os.getenv("OPENMRS_PASSWORD")
+        or os.getenv("OPENMRS_SERVICE_PASSWORD")
+    )
     if not username or not password:
         return None
     token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
@@ -63,6 +74,7 @@ class FilterSpec:
     label: str
     code_uuid: str
     filter_mode: str  # value_concept | value_boolean | client_numeric | condition | any_value
+    code_uuids: list[str] | None = None
     value_concept_uuid: str | None = None
     value_bool: bool | None = None
     operator: str | None = None
@@ -170,9 +182,7 @@ class OpenmrsReader:
         if filter_spec.filter_mode == "value_concept":
             if not filter_spec.value_concept_uuid:
                 return []
-            entries = self._fetch_observation_entries(
-                {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-            )
+            entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
             target = filter_spec.value_concept_uuid
             return [
                 entry
@@ -186,9 +196,7 @@ class OpenmrsReader:
             if filter_spec.value_bool is None:
                 return []
             target = bool(filter_spec.value_bool)
-            entries = self._fetch_observation_entries(
-                {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-            )
+            entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
             return [
                 entry
                 for entry in entries
@@ -200,9 +208,7 @@ class OpenmrsReader:
                 return []
             op = filter_spec.operator
             threshold = float(filter_spec.numeric_threshold)
-            entries = self._fetch_observation_entries(
-                {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-            )
+            entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
             out: list[dict[str, Any]] = []
             for entry in entries:
                 qty = ((entry.get("resource") or {}).get("valueQuantity") or {})
@@ -214,10 +220,8 @@ class OpenmrsReader:
                     out.append(entry)
             return out
         if filter_spec.filter_mode == "condition":
-            return self._fetch_condition_entries(filter_spec.code_uuid, date_from=date_from, date_to=date_to)
-        return self._fetch_observation_entries(
-            {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-        )
+            return self._fetch_condition_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
+        return self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
 
     def _patient_ids_value_concept(
         self,
@@ -232,15 +236,20 @@ class OpenmrsReader:
         if self._value_concept_capability is None:
             self._value_concept_capability = self._probe_value_concept(filter_spec.code_uuid)
         if self._value_concept_capability:
-            params = {
-                "code": filter_spec.code_uuid,
-                "value-concept": filter_spec.value_concept_uuid,
-            }
-            return self._paginate_observation_patient_ids(params, date_from=date_from, date_to=date_to)
+            patient_ids: list[str] = []
+            seen: set[str] = set()
+            for code_uuid in _code_uuids_for_filter(filter_spec):
+                params = {
+                    "code": code_uuid,
+                    "value-concept": filter_spec.value_concept_uuid,
+                }
+                for patient_id in self._paginate_observation_patient_ids(params, date_from=date_from, date_to=date_to):
+                    if patient_id not in seen:
+                        seen.add(patient_id)
+                        patient_ids.append(patient_id)
+            return patient_ids
         # Fallback: pull all obs for the code, filter coding[].code client-side.
-        entries = self._fetch_observation_entries(
-            {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-        )
+        entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
         target = filter_spec.value_concept_uuid
         patient_ids: list[str] = []
         seen: set[str] = set()
@@ -265,9 +274,7 @@ class OpenmrsReader:
     ) -> list[str]:
         if filter_spec.value_bool is None:
             return []
-        entries = self._fetch_observation_entries(
-            {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-        )
+        entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
         target = bool(filter_spec.value_bool)
         patient_ids: list[str] = []
         seen: set[str] = set()
@@ -292,9 +299,7 @@ class OpenmrsReader:
     ) -> list[str]:
         if filter_spec.numeric_threshold is None or filter_spec.operator is None:
             return []
-        entries = self._fetch_observation_entries(
-            {"code": filter_spec.code_uuid}, date_from=date_from, date_to=date_to
-        )
+        entries = self._fetch_observation_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
         op = filter_spec.operator
         threshold = float(filter_spec.numeric_threshold)
         patient_ids: list[str] = []
@@ -323,8 +328,15 @@ class OpenmrsReader:
         date_from: str | None,
         date_to: str | None,
     ) -> list[str]:
-        params = {"code": filter_spec.code_uuid}
-        return self._paginate_observation_patient_ids(params, date_from=date_from, date_to=date_to)
+        patient_ids: list[str] = []
+        seen: set[str] = set()
+        for code_uuid in _code_uuids_for_filter(filter_spec):
+            params = {"code": code_uuid}
+            for patient_id in self._paginate_observation_patient_ids(params, date_from=date_from, date_to=date_to):
+                if patient_id not in seen:
+                    seen.add(patient_id)
+                    patient_ids.append(patient_id)
+        return patient_ids
 
     def _patient_ids_condition(
         self,
@@ -333,7 +345,7 @@ class OpenmrsReader:
         date_from: str | None,
         date_to: str | None,
     ) -> list[str]:
-        entries = self._fetch_condition_entries(filter_spec.code_uuid, date_from=date_from, date_to=date_to)
+        entries = self._fetch_condition_entries_for_filter(filter_spec, date_from=date_from, date_to=date_to)
         patient_ids: list[str] = []
         seen: set[str] = set()
         for entry in entries:
@@ -343,6 +355,49 @@ class OpenmrsReader:
                 seen.add(patient_id)
                 patient_ids.append(patient_id)
         return patient_ids
+
+    def _fetch_observation_entries_for_filter(
+        self,
+        filter_spec: FilterSpec,
+        *,
+        date_from: str | None,
+        date_to: str | None,
+    ) -> list[dict[str, Any]]:
+        by_id: dict[str, dict[str, Any]] = {}
+        out_without_id: list[dict[str, Any]] = []
+        for code_uuid in _code_uuids_for_filter(filter_spec):
+            entries = self._fetch_observation_entries({"code": code_uuid}, date_from=date_from, date_to=date_to)
+            for entry in entries:
+                resource_id = str(((entry.get("resource") or {}).get("id")) or "")
+                if resource_id:
+                    by_id[resource_id] = entry
+                else:
+                    out_without_id.append(entry)
+        return [*by_id.values(), *out_without_id]
+
+    def _fetch_condition_entries_for_filter(
+        self,
+        filter_spec: FilterSpec,
+        *,
+        date_from: str | None,
+        date_to: str | None,
+    ) -> list[dict[str, Any]]:
+        by_id: dict[str, dict[str, Any]] = {}
+        out_without_id: list[dict[str, Any]] = []
+        for code_uuid in _code_uuids_for_filter(filter_spec):
+            entries = self._fetch_condition_entries(
+                code_uuid,
+                date_from=date_from,
+                date_to=date_to,
+                label=None,
+            )
+            for entry in entries:
+                resource_id = str(((entry.get("resource") or {}).get("id")) or "")
+                if resource_id:
+                    by_id[resource_id] = entry
+                else:
+                    out_without_id.append(entry)
+        return [*by_id.values(), *out_without_id]
 
     # ----- denominator: encounters_in_range -----
 
@@ -496,9 +551,13 @@ class OpenmrsReader:
                 if patient_id and patient_id not in seen:
                     seen.add(patient_id)
                     patient_ids.append(patient_id)
-            if len(entries) < self.page_size:
+            total = _bundle_total(bundle)
+            next_offset = offset + len(entries)
+            if total is not None and next_offset >= total:
                 break
-            offset += self.page_size
+            if total is None and len(entries) < self.page_size:
+                break
+            offset = next_offset
             page_index += 1
         return patient_ids
 
@@ -541,9 +600,13 @@ class OpenmrsReader:
             bundle = self._get_fhir(resource, page_params)
             entries = bundle.get("entry") or []
             out.extend(entries)
-            if len(entries) < self.page_size:
+            total = _bundle_total(bundle)
+            next_offset = offset + len(entries)
+            if total is not None and next_offset >= total:
                 break
-            offset += self.page_size
+            if total is None and len(entries) < self.page_size:
+                break
+            offset = next_offset
             page_index += 1
         return out
 
@@ -553,18 +616,19 @@ class OpenmrsReader:
         *,
         date_from: str | None,
         date_to: str | None,
+        label: str | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch FHIR Condition entries for diagnosis/problem-list reports.
 
         Diagnosis concepts are stored in OpenMRS `conditions`, not `obs`.
         OpenMRS FHIR2 exposes these via `Condition?code=...` and supports
-        `recorded-date` range filters.
+        `onset-date` range filters (clinical onset, not recordedDate).
         """
         params_list: list[tuple[str, str]] = [("code", code_uuid), ("_count", str(self.page_size))]
         if date_from:
-            params_list.append(("recorded-date", f"ge{date_from}"))
+            params_list.append(("onset-date", f"ge{date_from}"))
         if date_to:
-            params_list.append(("recorded-date", f"le{date_to}"))
+            params_list.append(("onset-date", f"le{date_to}"))
         out: list[dict[str, Any]] = []
         page_index = 0
         offset = 0
@@ -624,6 +688,10 @@ def _patient_id_from_reference(ref: str | None) -> str | None:
     return raw
 
 
+def _code_uuids_for_filter(filter_spec: FilterSpec) -> list[str]:
+    return list(dict.fromkeys([filter_spec.code_uuid, *(filter_spec.code_uuids or [])]))
+
+
 def _display_name_from_names(names: list[dict[str, Any]]) -> str:
     if not names:
         return ""
@@ -651,8 +719,8 @@ def _month_from_resource(resource: dict[str, Any]) -> str | None:
         resource.get("effectiveDateTime")
         or (resource.get("effectivePeriod") or {}).get("start")
         or (resource.get("period") or {}).get("start")
-        or resource.get("recordedDate")
         or resource.get("onsetDateTime")
+        or resource.get("recordedDate")
         or resource.get("issued")
     )
     if not raw:
@@ -668,8 +736,8 @@ def _date_from_resource(resource: dict[str, Any]) -> str | None:
         resource.get("effectiveDateTime")
         or (resource.get("effectivePeriod") or {}).get("start")
         or (resource.get("period") or {}).get("start")
-        or resource.get("recordedDate")
         or resource.get("onsetDateTime")
+        or resource.get("recordedDate")
         or resource.get("issued")
     )
     if not raw:
@@ -689,6 +757,14 @@ def _resource_in_date_range(resource: dict[str, Any], *, date_from: str | None, 
     if date_to and resource_date > date_to[:10]:
         return False
     return True
+
+
+def _bundle_total(bundle: dict[str, Any]) -> int | None:
+    try:
+        value = bundle.get("total")
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _compare(value: float, op: str, threshold: float) -> bool:

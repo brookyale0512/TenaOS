@@ -232,13 +232,23 @@ def _slug(value: str, fallback: str) -> str:
 # Basket -> Schema
 
 
-def basket_to_schema(basket: ConceptBasket, meta: FormMeta, ciel: CielClient) -> dict[str, Any]:
+def basket_to_schema(
+    basket: ConceptBasket,
+    meta: FormMeta,
+    ciel: CielClient,
+    *,
+    unresolved_out: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Build a full O3 FormSchema dict from the basket.
 
     Every CIEL concept reference is resolved to its bundle so the schema
     always contains: canonical OpenMRS UUID, canonical display label, and
     coded answers (for `Coded` datatype) drawn from the bundle's answer
     relations.
+
+    If ``unresolved_out`` is provided, any basket field whose concept could not
+    be resolved in CIEL is appended to it (instead of being silently dropped)
+    so the caller can surface it to the clinician as a validation warning.
 
     Returns a JSON-serialisable dict shaped per
     `frontend/src/types/forms.ts:FormSchema`.
@@ -248,7 +258,9 @@ def basket_to_schema(basket: ConceptBasket, meta: FormMeta, ciel: CielClient) ->
     for section_index, section in enumerate(basket.sections):
         section_questions: list[dict[str, Any]] = []
         for field_index, basket_field in enumerate(section.fields):
-            question = _field_to_question(basket_field, section_index, field_index, ciel, questions_seen)
+            question = _field_to_question(
+                basket_field, section_index, field_index, ciel, questions_seen, unresolved_out
+            )
             if question is not None:
                 section_questions.append(question)
         if not section_questions:
@@ -287,10 +299,20 @@ def _field_to_question(
     field_index: int,
     ciel: CielClient,
     questions_seen: set[str],
+    unresolved_out: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     try:
         bundle = ciel.get_concept_bundle(basket_field.concept_id)
     except ConceptNotFoundError:
+        if unresolved_out is not None:
+            unresolved_out.append(
+                {
+                    "conceptId": str(basket_field.concept_id),
+                    "label": basket_field.label_override or str(basket_field.concept_id),
+                    "sectionIndex": section_index,
+                    "reason": "Concept not found in CIEL",
+                }
+            )
         return None
     concept = bundle.get("concept", {}) or {}
     if concept.get("retired"):
@@ -323,13 +345,15 @@ def _field_to_question(
         # This is the standard OpenMRS pattern for symptom/diagnosis presence.
         options["answers"] = list(_BOOLEAN_ANSWERS)
     elif datatype == "Coded":
+        # Never publish retired answer concepts: they cannot be selected safely
+        # in OpenMRS and the apply-time filter already rejects such concepts.
         options["answers"] = [
             {
                 "concept": openmrs_uuid_for_concept_id(rel.get("target", {}).get("concept_id", "")),
                 "label": rel.get("target", {}).get("display_name") or str(rel.get("target", {}).get("concept_id", "")),
             }
             for rel in answer_relations
-            if rel.get("target", {}).get("concept_id")
+            if rel.get("target", {}).get("concept_id") and not rel.get("target", {}).get("retired")
         ]
 
     # Carry CIEL `extras` (low_absolute, hi_absolute, units, allow_decimal) onto
@@ -394,6 +418,9 @@ def validate_schema(schema: dict[str, Any], ciel: CielClient, *, allow_retired: 
 
     seen_question_ids: set[str] = set()
     referenced_concepts: dict[str, str] = {}
+    # concept_id -> (path, label) for question concepts only; answer concepts
+    # are excluded because the quality rules apply to the obs concept.
+    question_concepts: dict[str, tuple[str, str]] = {}
 
     pages = schema.get("pages") or []
     if not pages:
@@ -430,6 +457,10 @@ def validate_schema(schema: dict[str, Any], ciel: CielClient, *, allow_retired: 
                 concept_id = _concept_id_from_uuid(concept_uuid)
                 if concept_id:
                     referenced_concepts.setdefault(concept_id, f"{path}.questionOptions.concept")
+                    question_concepts.setdefault(
+                        concept_id,
+                        (f"{path}.questionOptions.concept", str(question.get("label") or "")),
+                    )
                 for answer_index, answer in enumerate(options.get("answers") or []):
                     answer_uuid = answer.get("concept")
                     if not answer_uuid:
@@ -445,6 +476,16 @@ def validate_schema(schema: dict[str, Any], ciel: CielClient, *, allow_retired: 
                     if answer_id:
                         referenced_concepts.setdefault(answer_id, f"{path}.questionOptions.answers[{answer_index}].concept")
 
+    # Lazy import avoids an import cycle (form_builder_tool_loop imports this
+    # module). These are the SAME rules enforced when the agent applies an
+    # add_field op, re-checked here so a frontend-edited basket cannot bypass
+    # the safety boundary.
+    from .form_builder_tool_loop import (
+        _coded_answer_quality_issue,
+        _common_measurement_label_mismatch,
+        _is_usable_form_bundle,
+    )
+
     for concept_id, path in referenced_concepts.items():
         try:
             bundle = ciel.get_concept_bundle(concept_id)
@@ -453,6 +494,18 @@ def validate_schema(schema: dict[str, Any], ciel: CielClient, *, allow_retired: 
             continue
         if bundle.get("concept", {}).get("retired") and not allow_retired:
             issues.append(ValidationIssue("error", path, f"Concept '{concept_id}' is retired and cannot be used."))
+        if concept_id in question_concepts:
+            q_path, q_label = question_concepts[concept_id]
+            usable, reason = _is_usable_form_bundle(bundle)
+            if not usable and reason:
+                issues.append(ValidationIssue("error", q_path, reason))
+            qa_reason = _coded_answer_quality_issue(bundle)
+            if qa_reason:
+                issues.append(ValidationIssue("error", q_path, qa_reason))
+            if q_label:
+                mismatch = _common_measurement_label_mismatch(q_label, bundle)
+                if mismatch:
+                    issues.append(ValidationIssue("error", q_path, mismatch))
     return ValidationReport(issues=issues)
 
 

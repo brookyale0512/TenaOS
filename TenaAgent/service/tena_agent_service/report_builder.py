@@ -80,6 +80,7 @@ class ReportFilter:
     filter_id: str
     concept_id: str
     label: str
+    concept_ids: list[str] = field(default_factory=list)
     filter_mode: FilterMode = "value_concept"
     value_concept_id: str | None = None
     value_bool: bool | None = None
@@ -90,6 +91,7 @@ class ReportFilter:
         return {
             "filterId": self.filter_id,
             "conceptId": self.concept_id,
+            "conceptIds": list(dict.fromkeys([self.concept_id, *self.concept_ids])),
             "label": self.label,
             "filterMode": self.filter_mode,
             "valueConceptId": self.value_concept_id,
@@ -104,6 +106,11 @@ class ReportFilter:
             filter_id=str(data.get("filterId") or ""),
             concept_id=str(data.get("conceptId") or ""),
             label=str(data.get("label") or ""),
+            concept_ids=[
+                str(cid)
+                for cid in (data.get("conceptIds") or [])
+                if str(cid or "").strip()
+            ],
             filter_mode=data.get("filterMode") or "value_concept",
             value_concept_id=data.get("valueConceptId"),
             value_bool=data.get("valueBool"),
@@ -258,9 +265,13 @@ class ValidationIssue:
     severity: Literal["error", "warning"]
     path: str
     message: str
+    code: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"severity": self.severity, "path": self.path, "message": self.message}
+        payload = {"severity": self.severity, "path": self.path, "message": self.message}
+        if self.code:
+            payload["code"] = self.code
+        return payload
 
 
 @dataclass
@@ -492,7 +503,7 @@ _DEFAULT_VISUALIZATION_BY_REPORT_TYPE: dict[ReportType, VisualizationTemplate] =
 
 _VISUALIZATION_DEFAULT_TITLES: dict[VisualizationTemplate, str] = {
     "filter_bar": "Matched patients by filter",
-    "indicator_rate": "Indicator numerator, denominator, and rate",
+    "indicator_rate": "Patient proportion",
     "pivot_grouped_bar": "Pivot counts by group",
     "pivot_stacked_bar": "Pivot counts by stacked group",
     "pivot_heatmap": "Pivot count intensity",
@@ -520,7 +531,7 @@ def default_visualization_for_spec(report_type: ReportType, group_by: list[Group
     group_by = group_by or []
     if report_type == "pivot" and group_by and group_by[0].dimension == "date_month":
         has_second_dimension = len(group_by) > 1
-        template: VisualizationTemplate = "stacked_time_series" if has_second_dimension else "time_series_bar"
+        template: VisualizationTemplate = "stacked_time_series" if has_second_dimension else "time_series_line"
         return ReportVisualization(
             template=template,
             title=_VISUALIZATION_DEFAULT_TITLES[template],
@@ -573,6 +584,7 @@ class CompiledFilter:
     label: str
     code_uuid: str
     filter_mode: FilterMode
+    code_uuids: list[str] = field(default_factory=list)
     value_concept_uuid: str | None = None
     value_bool: bool | None = None
     operator: NumericOperator | None = None
@@ -583,6 +595,7 @@ class CompiledFilter:
             "filterId": self.filter_id,
             "label": self.label,
             "codeUuid": self.code_uuid,
+            "codeUuids": list(dict.fromkeys([self.code_uuid, *self.code_uuids])),
             "filterMode": self.filter_mode,
             "valueConceptUuid": self.value_concept_uuid,
             "valueBool": self.value_bool,
@@ -678,25 +691,6 @@ def spec_to_query(
     )
 
 
-def _condition_code_alias(concept_id: str, label: str, bundle: dict[str, Any]) -> str | None:
-    """Resolve common diagnosis search hits to installed OpenMRS condition concepts.
-
-    The report agent searches the external CIEL store, but this demo OpenMRS
-    dictionary has some diagnosis concepts installed under mapped CIEL UUIDs
-    rather than the first CIEL hit. Example: the agent often selects CIEL 1366
-    for "malaria"; OpenMRS stores the condition as CIEL 116128.
-    """
-    display = str((bundle.get("concept") or {}).get("display_name") or "")
-    haystack = f"{concept_id} {label} {display}".lower()
-    if "malaria" in haystack:
-        return openmrs_uuid_for_concept_id("116128")
-    if "anaemia" in haystack or "anemia" in haystack:
-        return openmrs_uuid_for_concept_id("121629")
-    if "tuberculosis" in haystack or re.search(r"\btb\b", haystack):
-        return openmrs_uuid_for_concept_id("112141")
-    return None
-
-
 def _compile_filter(f: ReportFilter, ciel: CielClient) -> CompiledFilter:
     try:
         bundle = ciel.get_concept_bundle(f.concept_id)
@@ -707,15 +701,14 @@ def _compile_filter(f: ReportFilter, ciel: CielClient) -> CompiledFilter:
     # The compiler owns runtime mode selection. Older drafts may persist a
     # now-stale mode; rederive here so Diagnosis concepts use Condition reads.
     derived_mode = filter_mode_for_concept(bundle)
-    aliased_condition_code = _condition_code_alias(f.concept_id, f.label, bundle)
-    if aliased_condition_code and (
-        "diagnosis" in (f.label or "").lower()
-        or derived_mode == "condition"
-        or ((bundle.get("concept") or {}).get("concept_class") or "").lower() in {"test", "question"}
-    ):
-        derived_mode = "condition"
     mode: FilterMode = "any_value" if f.filter_mode == "any_value" and derived_mode != "condition" else derived_mode
-    code_uuid = aliased_condition_code or openmrs_uuid_for_concept_id(f.concept_id)
+    concept_ids = _normalized_filter_concept_ids(f)
+    code_uuid = openmrs_uuid_for_concept_id(concept_ids[0])
+    code_uuids = [
+        openmrs_uuid_for_concept_id(cid)
+        for cid in concept_ids
+        if cid != concept_ids[0]
+    ]
     value_concept_uuid: str | None = None
     if f.value_concept_id:
         value_concept_uuid = openmrs_uuid_for_concept_id(f.value_concept_id)
@@ -723,12 +716,22 @@ def _compile_filter(f: ReportFilter, ciel: CielClient) -> CompiledFilter:
         filter_id=f.filter_id,
         label=f.label or (bundle.get("concept", {}).get("display_name") or f.concept_id),
         code_uuid=code_uuid,
+        code_uuids=code_uuids,
         filter_mode=mode,
         value_concept_uuid=value_concept_uuid,
         value_bool=f.value_bool,
         operator=f.operator,
         numeric_threshold=f.numeric_threshold,
     )
+
+
+def _normalized_filter_concept_ids(f: ReportFilter) -> list[str]:
+    ids: list[str] = []
+    for cid in [f.concept_id, *list(f.concept_ids or [])]:
+        text = str(cid or "").strip()
+        if text and text not in ids:
+            ids.append(text)
+    return ids or [f.concept_id]
 
 
 # ---------------------------------------------------------------------------
@@ -776,10 +779,51 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
             bundle = ciel.get_concept_bundle(f.concept_id)
         except ConceptNotFoundError:
             issues.append(
-                ValidationIssue("error", f"{path}.conceptId", f"Concept '{f.concept_id}' is not in the CIEL store.")
+                ValidationIssue("error", f"{path}.conceptId", f"Concept '{f.concept_id}' is not in the CIEL store.", "concept_not_found")
             )
             continue
+        usability = _report_filter_usability_issue(bundle)
+        if usability:
+            issues.append(ValidationIssue("error", f"{path}.conceptId", usability, "unusable_filter_concept"))
+            continue
         derived_mode = filter_mode_for_concept(bundle)
+        for related_index, related_id in enumerate(_normalized_filter_concept_ids(f)[1:], 1):
+            try:
+                related_bundle = ciel.get_concept_bundle(related_id)
+            except ConceptNotFoundError:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"{path}.conceptIds[{related_index}]",
+                        f"Related concept '{related_id}' is not in the CIEL store.",
+                        "concept_not_found",
+                    )
+                )
+                continue
+            related_issue = _report_filter_usability_issue(related_bundle)
+            if related_issue:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"{path}.conceptIds[{related_index}]",
+                        related_issue,
+                        "unusable_filter_concept",
+                    )
+                )
+                continue
+            related_mode = filter_mode_for_concept(related_bundle)
+            if related_mode != derived_mode and not (derived_mode == "condition" and related_mode == "value_concept"):
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"{path}.conceptIds[{related_index}]",
+                        (
+                            f"Related concept '{related_id}' has filter mode '{related_mode}', "
+                            f"which cannot be combined with '{derived_mode}'."
+                        ),
+                        "filter_mode_mismatch",
+                    )
+                )
         # The agent may set the mode explicitly; reject mismatches.
         if (
             f.filter_mode
@@ -796,6 +840,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                         f"'{(bundle.get('concept') or {}).get('datatype')}' for "
                         f"concept {f.concept_id}. Expected '{derived_mode}'."
                     ),
+                    "filter_mode_mismatch",
                 )
             )
             continue
@@ -817,8 +862,24 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                             "Coded / N/A-clinical filter must supply valueConceptId "
                             "(e.g. CIEL 1065 for Yes, 1066 for No, or the chosen coded answer)."
                         ),
+                        "missing_filter_value",
                     )
                 )
+            elif (bundle.get("concept") or {}).get("datatype") == "Coded":
+                allowed_answers = _answer_concept_ids(bundle)
+                if allowed_answers and f.value_concept_id not in allowed_answers:
+                    issues.append(
+                        ValidationIssue(
+                            "error",
+                            f"{path}.valueConceptId",
+                            (
+                                f"valueConceptId '{f.value_concept_id}' is not an answer for "
+                                f"concept {f.concept_id}. Expand the concept and choose one of "
+                                "its coded answers."
+                            ),
+                            "coded_value_not_answer",
+                        )
+                    )
         elif effective_mode == "value_boolean":
             if f.value_bool is None:
                 issues.append(
@@ -826,6 +887,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                         "error",
                         f"{path}.valueBool",
                         "Boolean filter must supply valueBool (true or false).",
+                        "missing_filter_value",
                     )
                 )
         elif effective_mode == "client_numeric":
@@ -835,6 +897,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                         "error",
                         f"{path}.operator",
                         "Numeric filter must supply operator in {eq, gt, ge, lt, le}.",
+                        "numeric_operator_missing",
                     )
                 )
             if f.numeric_threshold is None:
@@ -843,6 +906,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                         "error",
                         f"{path}.numericThreshold",
                         "Numeric filter must supply numericThreshold (a number).",
+                        "numeric_threshold_missing",
                     )
                 )
 
@@ -860,6 +924,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                     "error",
                     path,
                     "Duplicate filter (same concept + value + operator combination).",
+                    "duplicate_filter",
                 )
             )
         seen_filter_keys.add(key)
@@ -901,6 +966,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                     "error",
                     "denominator",
                     "Indicator reports require a denominator (kind=ciel_concept or encounters_in_range).",
+                    "missing_denominator",
                 )
             )
         else:
@@ -915,6 +981,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                             f"Unsupported denominator kind '{spec.denominator.kind}'. "
                             "Use 'ciel_concept' or 'encounters_in_range'."
                         ),
+                        "invalid_denominator",
                     )
                 )
             elif spec.denominator.kind == "ciel_concept":
@@ -924,6 +991,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                             "error",
                             "denominator.conceptId",
                             "ciel_concept denominator must supply conceptId.",
+                            "missing_denominator",
                         )
                     )
                 else:
@@ -935,6 +1003,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                                 "error",
                                 "denominator.conceptId",
                                 f"Denominator concept '{spec.denominator.concept_id}' is not in the CIEL store.",
+                                "concept_not_found",
                             )
                         )
 
@@ -945,6 +1014,7 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
                     "error",
                     "groupBy",
                     "Pivot reports require at least one group_by dimension (sex, age_group, date_month, or concept_id).",
+                    "missing_group_by",
                 )
             )
         for index, g in enumerate(spec.group_by[:2]):
@@ -974,6 +1044,98 @@ def validate_spec(spec: ReportSpec, ciel: CielClient) -> ValidationReport:
             )
 
     return ValidationReport(issues=issues)
+
+
+_QA_DISPLAY_NAME_TOKENS = (
+    "missing",
+    "incorrect",
+    "invalid",
+    "not available",
+    "not applicable",
+    "review needed",
+    "needs review",
+    "data quality",
+    "data entry",
+    "verification needed",
+    "rejected",
+    "duplicate entry",
+    "error in",
+)
+
+_QA_ANSWER_TOKENS = (
+    "incorrect",
+    "missing",
+    "invalid",
+    "rejected",
+    "duplicate",
+    "review needed",
+    "needs review",
+    "data quality",
+    "data entry",
+    "verification needed",
+    "not verified",
+    "not available",
+    "not applicable",
+    "not specified",
+    "failed",
+    "error",
+)
+
+
+def _answer_concept_ids(bundle: dict[str, Any]) -> set[str]:
+    out: set[str] = set()
+    for rel in bundle.get("answers") or []:
+        target = rel.get("target") or {}
+        cid = str(target.get("concept_id") or target.get("id") or "").strip()
+        if cid and not target.get("retired"):
+            out.add(cid)
+    return out
+
+
+def _coded_answer_quality_issue(bundle: dict[str, Any]) -> str | None:
+    concept = bundle.get("concept") or {}
+    if (concept.get("datatype") or "").strip() != "Coded":
+        return None
+    labels = [
+        str((rel.get("target") or {}).get("display_name") or "").strip().lower()
+        for rel in (bundle.get("answers") or [])
+    ]
+    labels = [label for label in labels if label]
+    if not labels:
+        return None
+    qa_hits = [label for label in labels if any(token in label for token in _QA_ANSWER_TOKENS)]
+    informative = [
+        label
+        for label in labels
+        if label not in qa_hits and not any(token in label for token in ("other", "unknown", "none"))
+    ]
+    if len(qa_hits) >= 2 and len(informative) < max(1, len(qa_hits)):
+        return "Coded answer set is dominated by data-quality/workflow values, not clinical report values."
+    return None
+
+
+def _report_filter_usability_issue(bundle: dict[str, Any]) -> str | None:
+    concept = bundle.get("concept") or {}
+    if concept.get("retired"):
+        return "Concept is retired and cannot be used as a report filter."
+    cls = (concept.get("concept_class") or "").strip().lower()
+    datatype = (concept.get("datatype") or "").strip()
+    display = str(concept.get("display_name") or "").lower()
+    if any(token in display for token in _QA_DISPLAY_NAME_TOKENS):
+        return "Concept display name looks like a data-quality/workflow annotation."
+    if bundle.get("set_members") or cls in {"convset", "labset", "medset"}:
+        return "Concept is a set. Expand it and use a member concept as the filter."
+    if datatype == "Coded":
+        if not _answer_concept_ids(bundle):
+            return "Coded concept has no non-retired answers."
+        return _coded_answer_quality_issue(bundle)
+    if datatype in {"Boolean", "Numeric", "Text", "Date", "Datetime", "Time", "Document"}:
+        return None
+    if datatype in {"N/A", ""} and cls in _NA_CLINICAL_CLASSES_FOR_REPORT:
+        return None
+    if cls == "diagnosis":
+        return None
+    return f"Datatype '{datatype or 'N/A'}' with class '{cls or 'unknown'}' is not a supported report filter."
 
 
 __all__ = [

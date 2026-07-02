@@ -12,13 +12,16 @@ import os
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from tena_agent_service.ciel import ConceptNotFoundError, SeedHit  # noqa: E402
+from tena_agent_service.config import Settings  # noqa: E402
 from tena_agent_service.form_builder_tool_loop import FormBuilderToolLoop  # noqa: E402
+from tena_agent_service.form_pipeline import research_phase  # noqa: E402
 from tena_agent_service.form_conversation import (  # noqa: E402
     OP_AGENT_PROMPT,
     OP_CANDIDATE_PICKER,
@@ -56,7 +59,8 @@ class FakeCielClient:
         return self.search_hits.get(query, self.search_hits.get("*", []))
 
     def search_form_seeds(self, *args: Any, **kwargs: Any) -> list[SeedHit]:
-        return []
+        query = str(args[0] if args else kwargs.get("query", ""))
+        return self.search_hits.get(query, self.search_hits.get("*", []))
 
     def expand_seed(self, concept_id: str, *, depth: int = 2, allow_retired: bool = False) -> dict[str, Any]:
         return self.get_concept_bundle(concept_id)
@@ -195,12 +199,43 @@ def _tool_message(name: str, args: dict[str, Any], call_id: str) -> dict[str, An
     }
 
 
+def _finalize_worklist_msg(questions: list[dict[str, Any]], summary: str = "subject") -> dict[str, Any]:
+    return {
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_finalize",
+                "type": "function",
+                "function": {
+                    "name": "finalize_worklist",
+                    "arguments": json.dumps({"summary": summary, "questions": questions}),
+                },
+            }
+        ],
+    }
+
+
+def _worklist_for_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    questions: list[dict[str, Any]] = []
+    for op in operations:
+        if op.get("op") == "add_field":
+            label = op.get("label") or op.get("conceptId") or "Question"
+            questions.append({"label": str(label), "datatypeHint": "Boolean", "priority": len(questions) + 1})
+    return questions or [{"label": "Question", "datatypeHint": "Boolean", "priority": 1}]
+
+
 def _agent_build_messages(operations: list[dict[str, Any]], final: str = "Done") -> list[dict[str, Any] | str]:
+    """Script the grounded v2 pipeline: finalize a worklist, then commit + build.
+
+    Phase A (research) consumes ``finalize_worklist``; Phase B (CIEL resolution)
+    consumes the ``update_form_draft`` + ``build_form_schema`` tool calls and the
+    terminating text reply. The basket-mutation safety rules under test live in
+    ``FormBuilderToolLoop`` and apply identically on this path.
+    """
     return [
-        "Brainstorm",
-        _tool_message("get_form_draft", {"draftId": "ignored"}, "call_get"),
-        _tool_message("update_form_draft", {"draftId": "ignored", "operations": operations}, "call_update"),
-        _tool_message("build_form_schema", {"draftId": "ignored"}, "call_build"),
+        _finalize_worklist_msg(_worklist_for_operations(operations)),
+        _tool_message("update_form_draft", {"operations": operations}, "call_update"),
+        _tool_message("build_form_schema", {}, "call_build"),
         final,
     ]
 
@@ -251,8 +286,14 @@ class _DriverTestBase(unittest.TestCase):
             loop=self.loop,
             llm=FakeLlm(),  # type: ignore[arg-type]
         )
+        # The v2 grounded pipeline is the default. Disable the live WHO/MSF KB
+        # client so the research phase is deterministic and offline in tests;
+        # the scripted LLM finalizes the worklist directly.
+        self._orig_make_kb = research_phase._make_kb_client
+        research_phase._make_kb_client = lambda settings: None  # type: ignore[assignment]
 
     def tearDown(self) -> None:
+        research_phase._make_kb_client = self._orig_make_kb  # type: ignore[assignment]
         if self.db_path.exists():
             os.remove(self.db_path)
         os.rmdir(self.tempdir)
@@ -271,6 +312,15 @@ class _DriverTestBase(unittest.TestCase):
 
 # ---------------------------------------------------------------------------
 # Tests
+
+
+class PipelineDefaultTests(unittest.TestCase):
+    def test_v2_pipeline_is_enabled_by_default(self) -> None:
+        """The grounded v2 pipeline is the production default."""
+        self.assertTrue(Settings.from_env().form_agent_pipeline_v2)
+
+    def test_semantic_ciel_search_is_enabled_by_default(self) -> None:
+        self.assertTrue(Settings.from_env().ciel_semantic_search)
 
 
 class StageOneNameAndEncounterTypeTests(_DriverTestBase):
@@ -476,13 +526,15 @@ Section: Vitals
             ciel=self.ciel,  # type: ignore[arg-type]
             loop=self.loop,
             llm=FakeHealthyLlm([
-                "Brainstorm",
-                _tool_message("update_form_draft", {"draftId": "ignored", "operations": [{"op": "set_required", "sectionId": "vitals", "conceptId": "5085", "required": True}]}, "call_req"),
-                _tool_message("build_form_schema", {"draftId": "ignored"}, "call_build_req"),
+                # Turn 1: make systolic required.
+                _finalize_worklist_msg([{"label": "Systolic BP", "datatypeHint": "Numeric", "priority": 1}]),
+                _tool_message("update_form_draft", {"operations": [{"op": "set_required", "sectionId": "vitals", "conceptId": "5085", "required": True}]}, "call_req"),
+                _tool_message("build_form_schema", {}, "call_build_req"),
                 "Required.",
-                "Brainstorm",
-                _tool_message("update_form_draft", {"draftId": "ignored", "operations": [{"op": "remove_field", "sectionId": "vitals", "conceptId": "5089"}]}, "call_remove"),
-                _tool_message("build_form_schema", {"draftId": "ignored"}, "call_build_remove"),
+                # Turn 2: remove weight.
+                _finalize_worklist_msg([{"label": "Weight", "datatypeHint": "Numeric", "priority": 1}]),
+                _tool_message("update_form_draft", {"operations": [{"op": "remove_field", "sectionId": "vitals", "conceptId": "5089"}]}, "call_remove"),
+                _tool_message("build_form_schema", {}, "call_build_remove"),
                 "Removed.",
             ]),  # type: ignore[arg-type]
         )
@@ -618,12 +670,14 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         # The model claims '10 questions' in its final reply but only commits
         # 3 fields (5089, 5085, 5090). The deterministic footer must override.
         self._swap_driver(FakeHealthyLlm([
-            "Brainstorm",
-            _tool_message("get_form_draft", {"draftId": "ignored"}, "g"),
+            _finalize_worklist_msg(_worklist_for_operations([
+                {"op": "add_field", "conceptId": "5089"},
+                {"op": "add_field", "conceptId": "5085"},
+                {"op": "add_field", "conceptId": "5090"},
+            ])),
             _tool_message(
                 "update_form_draft",
                 {
-                    "draftId": "ignored",
                     "operations": [
                         {"op": "add_section", "sectionId": "vitals", "label": "Vitals"},
                         {"op": "add_field", "sectionId": "vitals", "conceptId": "5089"},
@@ -633,7 +687,7 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
                 },
                 "u",
             ),
-            _tool_message("build_form_schema", {"draftId": "ignored"}, "b"),
+            _tool_message("build_form_schema", {}, "b"),
             "I built a form with 10 wonderful questions across 5 sections.",
         ]))
         self.driver.handle_user_turn(draft.draft_id, ConversationTurn(kind="message", message="build vitals form"))
@@ -657,12 +711,13 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         self.store.update_draft(draft.draft_id, conversation_state="awaiting_question")
 
         self._swap_driver(FakeHealthyLlm([
-            "Brainstorm",
-            _tool_message("get_form_draft", {"draftId": "ignored"}, "g"),
+            _finalize_worklist_msg(_worklist_for_operations([
+                {"op": "add_field", "conceptId": "5089"},
+                {"op": "add_field", "conceptId": "907"},
+            ])),
             _tool_message(
                 "update_form_draft",
                 {
-                    "draftId": "ignored",
                     "operations": [
                         {"op": "add_section", "sectionId": "history", "label": "History"},
                         {"op": "add_field", "sectionId": "history", "conceptId": "5089"},
@@ -671,7 +726,7 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
                 },
                 "u",
             ),
-            _tool_message("build_form_schema", {"draftId": "ignored"}, "b"),
+            _tool_message("build_form_schema", {}, "b"),
             "All done.",
         ]))
         self.driver.handle_user_turn(draft.draft_id, ConversationTurn(kind="message", message="build form"))
@@ -734,18 +789,19 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
             f"Expected honest 'no-changes' wording, got: {final.detail!r}",
         )
 
-    def test_repeated_search_phrase_within_turn_is_rejected(self) -> None:
-        """The middleware must reject repeat search_ciel_seeds within a turn.
+    def test_repeated_search_phrase_within_turn_returns_cached_candidates(self) -> None:
+        """A repeat search_ciel_seeds within a turn is short-circuited.
 
         Mirrors the runtime failure at 21:39 where the model retried
-        'close contact TB' 4 times in a row after the small-basket nudge,
-        burning budget instead of refining via the vocabulary.
+        'close contact TB' multiple times. Instead of burning budget we flag
+        the repeat once and return the SAME candidates with a refine hint so
+        the model can pick a concept and move on.
         """
         draft_id = self._prepared_draft()
         self._swap_driver(FakeHealthyLlm([
-            "Brainstorm",
-            _tool_message("search_ciel_seeds", {"draftId": "ignored", "query": "close contact TB"}, "s1"),
-            _tool_message("search_ciel_seeds", {"draftId": "ignored", "query": "close contact TB"}, "s2_dup"),
+            _finalize_worklist_msg([{"label": "Close contact TB", "datatypeHint": "Boolean", "priority": 1}]),
+            _tool_message("search_ciel_seeds", {"query": "close contact TB"}, "s1"),
+            _tool_message("search_ciel_seeds", {"query": "close contact TB"}, "s2_dup"),
             "Stopping for now.",
         ]))
         self.driver.handle_user_turn(draft_id, ConversationTurn(kind="message", message="build TB form"))
@@ -754,17 +810,16 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         repeated = [e for e in events if e.operation == "search_ciel_seeds_repeated"]
         self.assertEqual(len(repeated), 1, "Repeat search must be flagged exactly once")
         self.assertIn("close contact tb", repeated[0].detail.lower())
-        # The corresponding tool_result on the repeat must contain the
-        # refinement vocabulary so the model has guidance for the next step.
-        repeated_results = [
+        # The repeat's tool_result carries a `note` guiding the model to pick or
+        # refine, rather than a bare error that strands it.
+        noted_results = [
             e for e in events
             if e.operation == "tool_result" and isinstance(e.payload, dict)
             and isinstance(e.payload.get("result"), dict)
-            and (e.payload["result"].get("phrase") == "close contact tb")
+            and isinstance(e.payload["result"].get("note"), str)
+            and "refine" in e.payload["result"]["note"].lower()
         ]
-        self.assertEqual(len(repeated_results), 1)
-        err = repeated_results[0].payload["result"]["error"]
-        self.assertIn("refinement strategy", err.lower())
+        self.assertEqual(len(noted_results), 1)
 
     def test_diagnosis_boolean_allowed_by_agent_path(self) -> None:
         """Diagnosis class + Boolean datatype IS a valid yes/no form question."""
@@ -821,9 +876,13 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         self.assertEqual(draft.published_form_uuid, "agent-published-form-uuid")
         self.assertEqual(len(self.writer.published), 1)
 
-    def test_small_basket_triggers_followup_search_on_create(self) -> None:
-        """A 2-field basket on a create turn must trigger a nudge for more fields."""
-        # Add a third bundle for the follow-up search.
+    def test_resolution_runs_multiple_commit_cycles_in_one_turn(self) -> None:
+        """The CIEL-resolution loop applies several commit cycles before ending.
+
+        The legacy "small-basket nudge" is gone; the grounded resolution loop
+        simply keeps executing the model's tool calls (commit, build, search,
+        commit again, build) until a text reply terminates the turn.
+        """
         self.bundles["5090"] = _bundle("5090", "Height (cm)", datatype="Numeric")
         self.search_hits["height"] = [_seed("5090", "Height (cm)")]
 
@@ -835,19 +894,15 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         )
         self.store.update_draft(draft.draft_id, conversation_state="awaiting_question")
 
-        # Canned tool-call sequence:
-        # 1) initial commit with only 2 fields,
-        # 2) build_form_schema -> triggers the small-basket nudge,
-        # 3) follow-up search,
-        # 4) second update_form_draft adding the third field,
-        # 5) build_form_schema again,
-        # 6) final text summary.
         self._swap_driver(FakeHealthyLlm([
-            "Brainstorm",
+            _finalize_worklist_msg([
+                {"label": "Weight", "datatypeHint": "Numeric", "priority": 1},
+                {"label": "Systolic BP", "datatypeHint": "Numeric", "priority": 2},
+                {"label": "Height", "datatypeHint": "Numeric", "priority": 3},
+            ]),
             _tool_message(
                 "update_form_draft",
                 {
-                    "draftId": "ignored",
                     "operations": [
                         {"op": "add_section", "sectionId": "vitals", "label": "Vitals"},
                         {"op": "add_field", "sectionId": "vitals", "conceptId": "5089"},
@@ -856,30 +911,23 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
                 },
                 "call_update1",
             ),
-            _tool_message("build_form_schema", {"draftId": "ignored"}, "call_build1"),
-            _tool_message(
-                "search_ciel_seeds",
-                {"draftId": "ignored", "query": "height"},
-                "call_search",
-            ),
+            _tool_message("build_form_schema", {}, "call_build1"),
+            _tool_message("search_ciel_seeds", {"query": "height"}, "call_search"),
             _tool_message(
                 "update_form_draft",
                 {
-                    "draftId": "ignored",
                     "operations": [
                         {"op": "add_field", "sectionId": "vitals", "conceptId": "5090"},
                     ],
                 },
                 "call_update2",
             ),
-            _tool_message("build_form_schema", {"draftId": "ignored"}, "call_build2"),
+            _tool_message("build_form_schema", {}, "call_build2"),
             "Done with 3 fields.",
         ]))
         self.driver.handle_user_turn(draft.draft_id, ConversationTurn(kind="message", message="build me ANC vitals form"))
         d = self.store.get_draft(draft.draft_id)
         field_ids = [field["conceptId"] for section in d.basket["sections"] for field in section["fields"]]
-        # Without the nudge the agent would have stopped at 2 fields. The nudge
-        # forces it through one more search + add_field cycle.
         self.assertEqual(field_ids, ["5089", "5085", "5090"])
 
     def test_text_only_replies_terminate_after_two_strikes(self) -> None:
@@ -912,6 +960,75 @@ class AgentSafetyBoundaryTests(_DriverTestBase):
         d = self.store.get_draft(draft.draft_id)
         fields = [field for section in (d.basket.get("sections") or []) for field in section.get("fields") or []]
         self.assertEqual(fields, [])
+
+    def test_reviewed_ciel_candidates_recover_when_model_never_commits(self) -> None:
+        """A model that searches useful CIEL concepts but never commits must still produce a draft."""
+        self.bundles.update(
+            {
+                "5959": _bundle(
+                    "5959",
+                    "Cough duration",
+                    datatype="Coded",
+                    concept_class="Question",
+                    answers=[{"concept_id": "1072", "display_name": "Days"}],
+                ),
+                "1072": _bundle("1072", "Days", datatype="N/A", concept_class="Misc"),
+                "161654": _bundle("161654", "Tuberculosis treatment number", datatype="Numeric", concept_class="Question"),
+                "161552": _bundle("161552", "Date enrolled in tuberculosis (TB) care", datatype="Date", concept_class="Misc"),
+                "1065": _bundle("1065", "Yes", datatype="N/A", concept_class="Misc"),
+                "1066": _bundle("1066", "No", datatype="N/A", concept_class="Misc"),
+            }
+        )
+        self.search_hits.update(
+            {
+                "cough": [_seed("5959", "Cough duration", datatype="Coded", concept_class="Question", answer_count=1)],
+                "tuberculosis treatment number": [_seed("161654", "Tuberculosis treatment number", datatype="Numeric", concept_class="Question")],
+                "date enrolled in tuberculosis (TB) care": [_seed("161552", "Date enrolled in tuberculosis (TB) care", datatype="Date", concept_class="Misc")],
+            }
+        )
+        draft_id = self._prepared_draft()
+        self._swap_driver(
+            FakeHealthyLlm(
+                [
+                    _finalize_worklist_msg([
+                        {"label": "Cough duration", "datatypeHint": "Numeric", "priority": 1},
+                        {"label": "Tuberculosis treatment number", "datatypeHint": "Numeric", "priority": 2},
+                        {"label": "Date enrolled in tuberculosis care", "datatypeHint": "Date", "priority": 3},
+                    ]),
+                    _tool_message("search_ciel_seeds", {"query": "cough"}, "s1"),
+                    _tool_message(
+                        "search_ciel_seeds",
+                        {"query": "tuberculosis treatment number"},
+                        "s2",
+                    ),
+                    _tool_message(
+                        "search_ciel_seeds",
+                        {"query": "date enrolled in tuberculosis (TB) care"},
+                        "s3",
+                    ),
+                    "I found candidates but will not commit them.",
+                    # Coverage-repair asks the model to map gaps onto the reviewed
+                    # candidates; it returns ops only over already-seen concept ids.
+                    json.dumps({"operations": [
+                        {"op": "add_section", "sectionId": "tb", "label": "TB"},
+                        {"op": "add_field", "sectionId": "tb", "conceptId": "5959", "label": "Cough duration"},
+                        {"op": "add_field", "sectionId": "tb", "conceptId": "161654", "label": "TB treatment number"},
+                        {"op": "add_field", "sectionId": "tb", "conceptId": "161552", "label": "Date enrolled"},
+                    ]}),
+                ]
+            )
+        )
+
+        self.driver.handle_user_turn(draft_id, ConversationTurn(kind="message", message="build tb intake form"))
+
+        draft = self.store.get_draft(draft_id)
+        field_ids = [field["conceptId"] for section in draft.basket["sections"] for field in section["fields"]]
+        self.assertIn("5959", field_ids)
+        self.assertIn("161654", field_ids)
+        self.assertIn("161552", field_ids)
+        self.assertIsNotNone(draft.last_schema)
+        events = self.store.list_events(draft_id)
+        self.assertTrue(any(e.operation == "recovery_commit_started" for e in events))
 
 
 class CompactToolResultTests(unittest.TestCase):

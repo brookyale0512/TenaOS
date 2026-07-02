@@ -3,10 +3,11 @@
 Six tools, no more (the same shape as the form-builder loop):
 
     1. search_ciel_seeds     -> reused from CielClient
-    2. expand_ciel_concept   -> reused from CielClient
-    3. get_report_draft      -> returns spec + last_query + last_result
-    4. update_report_draft   -> applies structured ops to the spec
-    5. build_report_query    -> compiles the spec into a CompiledQuery,
+    2. search_related_ciel_concepts -> finds related/narrower diagnosis concepts
+    3. expand_ciel_concept   -> reused from CielClient
+    4. get_report_draft      -> returns spec + last_query + last_result
+    5. update_report_draft   -> applies structured ops to the spec
+    6. build_report_query    -> compiles the spec into a CompiledQuery,
                                 resolves natural-language dates here, and
                                 stores last_query
     6. run_report            -> executes the compiled query against
@@ -17,10 +18,11 @@ Structured ops accepted by ``update_report_draft``::
     {"op": "set_report_type", "reportType": "count" | "cohort" | "indicator" | "pivot"}
     {"op": "set_date_range", "text": "last quarter"}     # NL phrase resolved on build
     {"op": "set_join_mode", "joinMode": "and" | "or"}
-    {"op": "add_filter", "conceptId": "1479", "valueBool": true, "label": "Night sweats"}
+    {"op": "add_filter", "conceptId": "1479", "conceptIds": ["1479", "..."], "valueBool": true, "label": "Night sweats"}
     {"op": "add_filter", "conceptId": "1063", "valueConceptId": "703", "label": "HIV positive"}
     {"op": "add_filter", "conceptId": "5089", "operator": "gt", "numericThreshold": 60, "label": "Weight over 60"}
     {"op": "remove_filter", "filterId": "..."}
+    {"op": "set_filter_value", "filterId": "...", "valueBool": true}
     {"op": "set_denominator", "kind": "encounters_in_range"}
     {"op": "set_denominator", "kind": "ciel_concept", "conceptId": "1063", "valueConceptId": "703"}
     {"op": "clear_denominator"}
@@ -73,6 +75,11 @@ REPORT_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "parameters": {"conceptId": "string (CIEL numeric id)", "depth": "integer (default 2)"},
     },
     {
+        "name": "search_related_ciel_concepts",
+        "description": "Find related or narrower CIEL diagnosis concepts for a broad clinical diagnosis phrase. Use before add_filter for broad diagnosis requests.",
+        "parameters": {"query": "string (clinical diagnosis phrase)", "limit": "integer (default 20)"},
+    },
+    {
         "name": "get_report_draft",
         "description": "Return the current report spec, last compiled query, and last result.",
         "parameters": {"draftId": "string"},
@@ -81,7 +88,7 @@ REPORT_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "name": "update_report_draft",
         "description": (
             "Apply structured operations to the report spec. Ops: set_report_type, "
-            "set_date_range (natural language), set_join_mode, add_filter, remove_filter, "
+                "set_date_range (natural language), set_join_mode, add_filter, remove_filter, set_filter_value, "
             "set_denominator, clear_denominator, add_group_by, remove_group_by, set_visualization."
         ),
         "parameters": {"draftId": "string", "operations": "object[]"},
@@ -127,12 +134,24 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "search_related_ciel_concepts",
+            "description": "Find related/narrower non-retired CIEL Diagnosis concepts for a broad diagnosis report filter. Use for requests like 'patients diagnosed with malaria' before add_filter; put selected conceptIds into one add_filter operation.",
+            "parameters": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "default": 20}},
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_report_draft",
             "description": "Read the current spec and the last compiled query / result.",
             "parameters": {
                 "type": "object",
-                "properties": {"draftId": {"type": "string"}},
-                "required": ["draftId"],
+                "properties": {},
+                "required": [],
             },
         },
     },
@@ -140,11 +159,10 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "update_report_draft",
-            "description": "Apply structured spec mutations (set_report_type, set_date_range, add_filter, remove_filter, set_join_mode, set_denominator, clear_denominator, add_group_by, remove_group_by, set_visualization).",
+            "description": "Apply structured spec mutations (set_report_type, set_date_range, add_filter, remove_filter, set_filter_value, set_join_mode, set_denominator, clear_denominator, add_group_by, remove_group_by, set_visualization). For broad diagnosis filters, add_filter may include conceptIds: [primary, related...] to express one logical OR filter over related CIEL concepts selected by the agent.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "draftId": {"type": "string"},
                     "operations": {
                         "type": "array",
                         "items": {
@@ -155,6 +173,7 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
                                 "text": {"type": "string"},
                                 "joinMode": {"type": "string"},
                                 "conceptId": {"type": "string"},
+                                "conceptIds": {"type": "array", "items": {"type": "string"}},
                                 "valueConceptId": {"type": "string"},
                                 "valueBool": {"type": "boolean"},
                                 "operator": {"type": "string"},
@@ -172,7 +191,7 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
                         },
                     },
                 },
-                "required": ["draftId", "operations"],
+                "required": ["operations"],
             },
         },
     },
@@ -183,8 +202,8 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
             "description": "Resolve dates, validate the spec, compile to a FHIR query plan.",
             "parameters": {
                 "type": "object",
-                "properties": {"draftId": {"type": "string"}},
-                "required": ["draftId"],
+                "properties": {},
+                "required": [],
             },
         },
     },
@@ -195,8 +214,8 @@ REPORT_OPENAI_TOOLS: list[dict[str, Any]] = [
             "description": "Execute the compiled query against OpenMRS FHIR2 and store the result.",
             "parameters": {
                 "type": "object",
-                "properties": {"draftId": {"type": "string"}},
-                "required": ["draftId"],
+                "properties": {},
+                "required": [],
             },
         },
     },
@@ -217,6 +236,289 @@ def _normalize_concept_id(value: Any) -> tuple[str, bool]:
     return raw, False
 
 
+def _normalize_concept_id_list(value: Any, *, primary: str) -> list[str]:
+    ids: list[str] = []
+    for item in [primary, *(value if isinstance(value, list) else [])]:
+        normalized, _ = _normalize_concept_id(item)
+        if normalized and normalized not in ids:
+            ids.append(normalized)
+    return ids or [primary]
+
+
+def _looks_like_broad_diagnosis_query(query: str) -> bool:
+    lowered = str(query or "").lower()
+    return "diagnos" in lowered or "diagnosed" in lowered or "cases" in lowered
+
+
+def _date_range_text_from_operation(operation: dict[str, Any]) -> str:
+    return str(
+        operation.get("text")
+        or operation.get("dateRangeLabel")
+        or operation.get("dateRange")
+        or operation.get("date_range")
+        or ""
+    ).strip()
+
+
+def _first_concept_id(value: Any) -> str:
+    if isinstance(value, list):
+        for item in value:
+            normalized, _ = _normalize_concept_id(item)
+            if normalized:
+                return normalized
+    return ""
+
+
+_NA_CLINICAL_CLASSES = {
+    "diagnosis",
+    "symptom",
+    "finding",
+    "symptom/finding",
+    "procedure",
+    "radiology/imaging procedure",
+    "test",
+    "question",
+    "observable entity",
+    "program",
+    "specimen",
+    "misc",
+}
+
+_QA_DISPLAY_NAME_TOKENS = (
+    "missing",
+    "incorrect",
+    "invalid",
+    "not available",
+    "not applicable",
+    "review needed",
+    "needs review",
+    "data quality",
+    "data entry",
+    "verification needed",
+    "rejected",
+    "duplicate entry",
+    "error in",
+)
+
+_QA_ANSWER_TOKENS = (
+    "incorrect",
+    "missing",
+    "invalid",
+    "rejected",
+    "duplicate",
+    "review needed",
+    "needs review",
+    "data quality",
+    "data entry",
+    "verification needed",
+    "not verified",
+    "not available",
+    "not applicable",
+    "not specified",
+    "failed",
+    "error",
+)
+
+
+def _dedupe_seed_hits(hits: list[Any]) -> list[Any]:
+    by_id: dict[str, Any] = {}
+    for hit in hits or []:
+        cid = str(getattr(hit, "concept_id", "") or "")
+        if not cid:
+            continue
+        existing = by_id.get(cid)
+        if existing is None or float(getattr(hit, "score", 0.0) or 0.0) > float(
+            getattr(existing, "score", 0.0) or 0.0
+        ):
+            by_id[cid] = hit
+    return list(by_id.values())
+
+
+def _related_diagnosis_candidates(ciel: CielClient, query: str, *, limit: int) -> list[dict[str, Any]]:
+    query_text = str(query or "").strip()
+    variants = _related_query_variants(query_text)
+    by_id: dict[str, dict[str, Any]] = {}
+    for variant in variants:
+        try:
+            hits = ciel.search_concepts(variant, concept_classes=["Diagnosis"], limit=max(limit, 20))
+        except Exception:
+            hits = []
+        for hit in hits or []:
+            display = str(getattr(hit, "display_name", "") or "")
+            cid = str(getattr(hit, "concept_id", "") or "")
+            if not cid or cid in by_id:
+                continue
+            if not _related_display_matches(query_text, display):
+                continue
+            by_id[cid] = {
+                "conceptId": cid,
+                "displayName": display,
+                "conceptClass": getattr(hit, "concept_class", None),
+                "datatype": getattr(hit, "datatype", None),
+                "score": float(getattr(hit, "score", 0.0) or 0.0),
+                "sourceQuery": variant,
+            }
+    ranked = sorted(
+        by_id.values(),
+        key=lambda item: _related_candidate_rank(query_text, item),
+        reverse=True,
+    )
+    return ranked[:limit]
+
+
+def _related_query_variants(query: str) -> list[str]:
+    base = _diagnosis_base_phrase(query)
+    variants = [query, base, f"{base} diagnosis", f"{base} complications", f"severe {base}", f"uncomplicated {base}"]
+    out: list[str] = []
+    for variant in variants:
+        cleaned = " ".join(str(variant or "").split())
+        if cleaned and cleaned.lower() not in {item.lower() for item in out}:
+            out.append(cleaned)
+    return out
+
+
+def _diagnosis_base_phrase(query: str) -> str:
+    import re
+
+    text = re.sub(r"\b(?:patients?|cases?|diagnosed|diagnosis|with|of|report|count|cohort)\b", " ", str(query or ""), flags=re.I)
+    text = re.sub(r"\s+", " ", text).strip(" .,;:")
+    return text or str(query or "").strip()
+
+
+def _related_display_matches(query: str, display: str) -> bool:
+    base_tokens = {
+        token
+        for token in _diagnosis_base_phrase(query).lower().split()
+        if len(token) > 2
+    }
+    display_lower = display.lower()
+    if not base_tokens:
+        return True
+    return any(token in display_lower for token in base_tokens)
+
+
+_LESS_SPECIFIC_DIAGNOSIS_TOKENS = (
+    "suspected",
+    "h/o:",
+    "history of",
+    "maternal",
+    "pregnancy",
+    "pregnant",
+    "baby",
+    "hiv",
+    "human immunodeficiency",
+    "world health organization",
+)
+
+_SPECIFIC_DISEASE_SUBTYPE_TOKENS = (
+    "falciparum",
+    "cerebral",
+    "vivax",
+    "severe",
+    "uncomplicated",
+    "complicated",
+    "non-falciparum",
+    "quartan",
+    "mixed",
+)
+
+
+def _related_candidate_rank(query: str, item: dict[str, Any]) -> tuple[float, float]:
+    """Rank CIEL diagnosis candidates before Gemma sees them.
+
+    This is terminology shaping, not clinical hardcoding: generic uncertainty,
+    history, pregnancy, and comorbidity qualifiers are demoted unless requested;
+    disease subtypes are promoted for broad disease-family diagnosis requests.
+    Gemma still chooses the final conceptIds.
+    """
+    score = float(item.get("score") or 0.0)
+    display = str(item.get("displayName") or "").lower()
+    query_lower = query.lower()
+    base_tokens = [token for token in _diagnosis_base_phrase(query_lower).split() if len(token) > 2]
+
+    rank = score
+    if base_tokens and any(token in display for token in base_tokens):
+        rank += 0.35
+    if any(token in display for token in _SPECIFIC_DISEASE_SUBTYPE_TOKENS):
+        rank += 0.25
+    for token in _LESS_SPECIFIC_DIAGNOSIS_TOKENS:
+        if token in display and token not in query_lower:
+            rank -= 0.55
+    # Prefer concise disease concepts over administrative/comorbidity labels.
+    word_count = len(display.split())
+    if word_count <= 4:
+        rank += 0.1
+    elif word_count >= 8:
+        rank -= 0.15
+    return rank, score
+
+
+def _answer_concept_ids(bundle: dict[str, Any]) -> set[str]:
+    out: set[str] = set()
+    for rel in bundle.get("answers") or []:
+        target = rel.get("target") or {}
+        cid = str(target.get("concept_id") or target.get("id") or "").strip()
+        if cid and not target.get("retired"):
+            out.add(cid)
+    return out
+
+
+def _is_na_clinical_bundle(bundle: dict[str, Any]) -> bool:
+    concept = bundle.get("concept") or {}
+    datatype = (concept.get("datatype") or "").strip()
+    cls = (concept.get("concept_class") or "").strip().lower()
+    return datatype in {"N/A", ""} and cls in _NA_CLINICAL_CLASSES
+
+
+def _coded_answer_quality_issue(bundle: dict[str, Any]) -> str | None:
+    concept = bundle.get("concept") or {}
+    if (concept.get("datatype") or "").strip() != "Coded":
+        return None
+    labels = [
+        str((rel.get("target") or {}).get("display_name") or "").strip().lower()
+        for rel in (bundle.get("answers") or [])
+    ]
+    labels = [label for label in labels if label]
+    if not labels:
+        return None
+    qa_hits = [label for label in labels if any(token in label for token in _QA_ANSWER_TOKENS)]
+    informative = [
+        label
+        for label in labels
+        if label not in qa_hits and not any(token in label for token in ("other", "unknown", "none"))
+    ]
+    if len(qa_hits) >= 2 and len(informative) < max(1, len(qa_hits)):
+        return "Coded answer set is dominated by data-quality/workflow values, not clinical report values."
+    return None
+
+
+def _is_usable_report_filter_bundle(bundle: dict[str, Any]) -> tuple[bool, str | None]:
+    concept = bundle.get("concept") or {}
+    if concept.get("retired"):
+        return False, "Concept is retired."
+    cls = (concept.get("concept_class") or "").strip().lower()
+    datatype = (concept.get("datatype") or "").strip()
+    display = str(concept.get("display_name") or "").lower()
+    if any(token in display for token in _QA_DISPLAY_NAME_TOKENS):
+        return False, "Concept display name looks like a data-quality/workflow annotation."
+    if bundle.get("set_members") or cls in {"convset", "labset", "medset"}:
+        return False, "Concept is a set. Expand it and use a member concept as the filter."
+    if datatype == "Coded":
+        if not _answer_concept_ids(bundle):
+            return False, "Coded concept has no non-retired answers."
+        qa_reason = _coded_answer_quality_issue(bundle)
+        if qa_reason:
+            return False, qa_reason
+        return True, None
+    if datatype in {"Boolean", "Numeric", "Text", "Date", "Datetime", "Time", "Document"}:
+        return True, None
+    if _is_na_clinical_bundle(bundle):
+        return True, None
+    if cls == "diagnosis":
+        return True, None
+    return False, f"Datatype '{datatype or 'N/A'}' with class '{cls or 'unknown'}' is not a supported report filter."
+
+
 class ReportBuilderToolLoop:
     """Stateless executor for the six report-builder tools."""
 
@@ -234,10 +536,33 @@ class ReportBuilderToolLoop:
     # ----- tools -----
 
     def search_ciel_seeds(self, draft_id: str, *, query: str, limit: int = 10) -> dict[str, Any]:
+        requested_limit = max(int(limit), 20 if _looks_like_broad_diagnosis_query(query) else int(limit))
+        pool_limit = max(requested_limit, 25)
+        pool_seed_limit = max(min(requested_limit, 20), 10)
         try:
-            hits = self.ciel.search_form_seeds(query, limit=limit, seed_limit=min(limit, 8))
+            primary = self.ciel.search_form_seeds(query, limit=pool_limit, seed_limit=pool_seed_limit)
+        except Exception as exc:
+            import logging
+            logging.getLogger("tenaos.tena_agent.report").warning(
+                "CIEL search_form_seeds failed for query=%r: %s", query, exc, exc_info=True
+            )
+            primary = []
+        semantic_score: dict[str, float] = {}
+        try:
+            for hit in self.ciel.search_concepts(query, limit=pool_limit):
+                cid = str(getattr(hit, "concept_id", "") or "")
+                if cid:
+                    semantic_score[cid] = float(getattr(hit, "score", 0.0) or 0.0)
         except Exception:
-            hits = []
+            semantic_score = {}
+        hits = sorted(
+            _dedupe_seed_hits(primary),
+            key=lambda s: (
+                semantic_score.get(str(getattr(s, "concept_id", "") or ""), -1.0),
+                float(getattr(s, "score", 0.0) or 0.0),
+            ),
+            reverse=True,
+        )[:requested_limit]
         payload = {"query": query, "seeds": [hit.to_dict() for hit in hits]}
         self.store.append_event(
             draft_id,
@@ -268,6 +593,18 @@ class ReportBuilderToolLoop:
         )
         return payload
 
+    def search_related_ciel_concepts(self, draft_id: str, *, query: str, limit: int = 20) -> dict[str, Any]:
+        candidates = _related_diagnosis_candidates(self.ciel, query, limit=max(int(limit), 20))
+        payload = {"query": query, "concepts": candidates}
+        self.store.append_event(
+            draft_id,
+            actor="middleware",
+            operation="search_related_ciel_concepts",
+            detail=f"Searched related CIEL diagnosis concepts for '{query}' ({len(candidates)} returned)",
+            payload=payload,
+        )
+        return payload
+
     def get_report_draft(self, draft_id: str) -> dict[str, Any]:
         return self.store.get_draft(draft_id).to_dict()
 
@@ -285,6 +622,13 @@ class ReportBuilderToolLoop:
                 draft_id,
                 concept_id=_require_str(arguments, "conceptId"),
                 depth=int(arguments.get("depth") or 2),
+            )
+        if name == "search_related_ciel_concepts":
+            draft_id = _require_str(arguments, "draftId")
+            return self.search_related_ciel_concepts(
+                draft_id,
+                query=_require_str(arguments, "query"),
+                limit=int(arguments.get("limit") or 20),
             )
         if name == "get_report_draft":
             return self.get_report_draft(_require_str(arguments, "draftId"))
@@ -313,7 +657,16 @@ class ReportBuilderToolLoop:
         spec = ReportSpec.from_dict(draft.spec)
         applied: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
-        operations, dropped_dupes = _dedupe_operations(list(operations or []))
+        operations, normalized_ops = _normalize_report_operations(list(operations or []))
+        if normalized_ops:
+            self.store.append_event(
+                draft_id,
+                actor="middleware",
+                operation="operation_normalized",
+                detail=f"Normalized {len(normalized_ops)} report operation(s) with missing op names.",
+                payload={"normalizedOperations": normalized_ops},
+            )
+        operations, dropped_dupes = _dedupe_operations(operations)
         if dropped_dupes:
             warnings.append(
                 {
@@ -328,7 +681,7 @@ class ReportBuilderToolLoop:
                     spec.report_type = _require_str(operation, "reportType")  # type: ignore[assignment]
                     applied.append({"op": op_name, "reportType": spec.report_type})
                 elif op_name == "set_date_range":
-                    text = str(operation.get("text") or "").strip()
+                    text = _date_range_text_from_operation(operation)
                     spec.date_range_label = text or None
                     spec.date_from = None
                     spec.date_to = None
@@ -350,6 +703,10 @@ class ReportBuilderToolLoop:
                     if len(spec.filters) == before:
                         raise ValueError(f"Filter '{filter_id}' not found.")
                     applied.append({"op": op_name, "filterId": filter_id})
+                elif op_name == "set_filter_value":
+                    filter_id = _require_str(operation, "filterId")
+                    updated = self._apply_set_filter_value(spec, filter_id, operation)
+                    applied.append({"op": op_name, "filterId": filter_id, **updated})
                 elif op_name == "set_denominator":
                     kind = _require_str(operation, "kind")
                     if kind == "encounters_in_range":
@@ -396,7 +753,9 @@ class ReportBuilderToolLoop:
                         raise ValueError(f"group_by dimension '{dimension}' not found.")
                     applied.append({"op": op_name, "dimension": dimension})
                 elif op_name == "set_visualization":
-                    template = _require_str(operation, "template")
+                    template = _visualization_template_from_operation(operation)
+                    if not template:
+                        raise ValueError("Operation 'set_visualization' requires 'template'.")
                     title = str(operation.get("title") or "").strip()
                     reason = str(operation.get("reason") or "").strip()
                     requested = ReportVisualization(template=template, title=title, reason=reason)  # type: ignore[arg-type]
@@ -410,7 +769,16 @@ class ReportBuilderToolLoop:
             except (KeyError, ValueError) as exc:
                 warnings.append({"operation": operation, "reason": str(exc)})
 
-        self.store.update_draft(draft_id, spec=spec.to_dict(), report_type=spec.report_type)
+        _normalize_report_type_for_grouping(spec)
+        self.store.update_draft(
+            draft_id,
+            spec=spec.to_dict(),
+            report_type=spec.report_type,
+            clear_last_query=bool(applied),
+            clear_last_result=bool(applied),
+            clear_last_run_at=bool(applied),
+            status="draft" if applied else None,
+        )
         self.store.append_event(
             draft_id,
             actor=actor,  # type: ignore[arg-type]
@@ -420,8 +788,63 @@ class ReportBuilderToolLoop:
         )
         return {"applied": applied, "warnings": warnings, "spec": spec.to_dict()}
 
+    def _apply_set_filter_value(
+        self,
+        spec: ReportSpec,
+        filter_id: str,
+        operation: dict[str, Any],
+    ) -> dict[str, Any]:
+        target = next((f for f in spec.filters if f.filter_id == filter_id), None)
+        if target is None:
+            raise ValueError(f"Filter '{filter_id}' not found.")
+        bundle = self.ciel.get_concept_bundle(target.concept_id)
+        mode = filter_mode_for_concept(bundle)
+        if mode == "condition":
+            target.value_concept_id = None
+            target.value_bool = None
+            target.operator = None
+            target.numeric_threshold = None
+            target.filter_mode = mode
+            return {"filterMode": mode}
+        if "valueConceptId" in operation:
+            value_concept_id, _ = _normalize_concept_id(operation.get("valueConceptId"))
+            allowed = _answer_concept_ids(bundle)
+            if allowed and value_concept_id not in allowed:
+                raise ValueError(
+                    f"valueConceptId '{value_concept_id}' is not an answer for concept '{target.concept_id}'."
+                )
+            target.value_concept_id = value_concept_id
+        elif mode == "value_concept" and target.value_concept_id is None and _is_na_clinical_bundle(bundle):
+            target.value_concept_id = "1065"
+        if "valueBool" in operation:
+            target.value_bool = bool(operation.get("valueBool"))
+        elif mode == "value_boolean" and target.value_bool is None:
+            target.value_bool = True
+        if "operator" in operation:
+            op = str(operation.get("operator") or "").strip()
+            if op not in {"eq", "gt", "ge", "lt", "le"}:
+                raise ValueError("operator must be one of eq, gt, ge, lt, le.")
+            target.operator = op  # type: ignore[assignment]
+        if "numericThreshold" in operation:
+            try:
+                target.numeric_threshold = float(operation.get("numericThreshold"))
+            except (TypeError, ValueError):
+                raise ValueError("numericThreshold must be a number.")
+        if operation.get("label"):
+            target.label = str(operation.get("label")).strip()
+        target.filter_mode = mode
+        return {
+            "filterMode": target.filter_mode,
+            "valueConceptId": target.value_concept_id,
+            "valueBool": target.value_bool,
+            "operator": target.operator,
+            "numericThreshold": target.numeric_threshold,
+        }
+
     def _build_filter_from_op(self, operation: dict[str, Any]) -> ReportFilter:
-        raw_id = _require_str(operation, "conceptId")
+        raw_id = str(operation.get("conceptId") or _first_concept_id(operation.get("conceptIds")) or "").strip()
+        if not raw_id:
+            raise ValueError("Operation 'add_filter' requires 'conceptId' or a non-empty 'conceptIds' array.")
         concept_id, was_padded = _normalize_concept_id(raw_id)
         if not concept_id:
             raise ValueError("Operation requires a valid conceptId (numeric CIEL id).")
@@ -431,7 +854,28 @@ class ReportBuilderToolLoop:
             raise ValueError(
                 f"Concept '{raw_id}' is not in the CIEL store. Use a CIEL numeric id returned by search_ciel_seeds."
             ) from exc
+        usable, reason = _is_usable_report_filter_bundle(bundle)
+        if not usable:
+            display = (bundle.get("concept") or {}).get("display_name") or concept_id
+            raise ValueError(f"Concept '{concept_id}' ({display}) cannot be used as a report filter: {reason}")
         mode = filter_mode_for_concept(bundle)
+        concept_ids = _normalize_concept_id_list(operation.get("conceptIds"), primary=concept_id)
+        for extra_id in concept_ids[1:]:
+            try:
+                extra_bundle = self.ciel.get_concept_bundle(extra_id)
+            except ConceptNotFoundError as exc:
+                raise ValueError(
+                    f"Related concept '{extra_id}' is not in the CIEL store. Use only CIEL ids returned by search/expand."
+                ) from exc
+            extra_usable, extra_reason = _is_usable_report_filter_bundle(extra_bundle)
+            if not extra_usable:
+                display = (extra_bundle.get("concept") or {}).get("display_name") or extra_id
+                raise ValueError(f"Related concept '{extra_id}' ({display}) cannot be used as a report filter: {extra_reason}")
+            extra_mode = filter_mode_for_concept(extra_bundle)
+            if extra_mode != mode and not (mode == "condition" and extra_mode == "value_concept"):
+                raise ValueError(
+                    f"Related concept '{extra_id}' has filter mode '{extra_mode}', which cannot be combined with '{mode}'."
+                )
         value_concept_id: str | None = operation.get("valueConceptId")
         if value_concept_id:
             value_concept_id_norm, _ = _normalize_concept_id(value_concept_id)
@@ -453,11 +897,22 @@ class ReportBuilderToolLoop:
         # as the obvious default for "X present" semantics.
         if mode == "value_boolean" and value_bool is None:
             value_bool = True
+        if mode == "value_concept" and value_concept_id is None and _is_na_clinical_bundle(bundle):
+            value_concept_id = "1065"
+        if mode == "value_concept" and value_concept_id is not None:
+            allowed = _answer_concept_ids(bundle)
+            if allowed and value_concept_id not in allowed:
+                display = (bundle.get("concept") or {}).get("display_name") or concept_id
+                raise ValueError(
+                    f"valueConceptId '{value_concept_id}' is not an answer for concept "
+                    f"'{concept_id}' ({display}). Expand the concept and choose one of its coded answers."
+                )
 
         return ReportFilter(
             filter_id=f"f_{uuid4().hex[:8]}",
             concept_id=concept_id,
             label=label,
+            concept_ids=concept_ids,
             filter_mode=mode,
             value_concept_id=value_concept_id,
             value_bool=value_bool,
@@ -478,6 +933,14 @@ class ReportBuilderToolLoop:
                     spec.date_from = d1.isoformat()
                     spec.date_to = d2.isoformat()
             except ValueError as exc:
+                self.store.update_draft(
+                    draft_id,
+                    spec=spec.to_dict(),
+                    clear_last_query=True,
+                    clear_last_result=True,
+                    clear_last_run_at=True,
+                    status="draft",
+                )
                 self.store.append_event(
                     draft_id,
                     actor="middleware",
@@ -494,11 +957,20 @@ class ReportBuilderToolLoop:
                     },
                 }
         # Persist resolved dates back so subsequent reruns reuse them.
+        _normalize_report_type_for_grouping(spec)
         self.store.update_draft(draft_id, spec=spec.to_dict())
 
         report = validate_spec(spec, self.ciel)
         if not report.ok:
             payload = {"compiled": None, "validation": report.to_dict()}
+            self.store.update_draft(
+                draft_id,
+                spec=spec.to_dict(),
+                clear_last_query=True,
+                clear_last_result=True,
+                clear_last_run_at=True,
+                status="draft",
+            )
             self.store.append_event(
                 draft_id,
                 actor="middleware",
@@ -525,11 +997,10 @@ class ReportBuilderToolLoop:
 
     def run_report(self, draft_id: str) -> dict[str, Any]:
         draft = self.store.get_draft(draft_id)
-        if not draft.last_query:
-            built = self.build_report_query(draft_id)
-            if not built.get("compiled"):
-                return {"success": False, "error": "Query has validation errors; cannot run.", "validation": built.get("validation")}
-            draft = self.store.get_draft(draft_id)
+        built = self.build_report_query(draft_id)
+        if not built.get("compiled"):
+            return {"success": False, "error": "Query has validation errors; cannot run.", "validation": built.get("validation")}
+        draft = self.store.get_draft(draft_id)
 
         compiled = draft.last_query or {}
         report_type = compiled.get("reportType") or draft.report_type
@@ -542,6 +1013,7 @@ class ReportBuilderToolLoop:
                 label=f["label"],
                 code_uuid=f["codeUuid"],
                 filter_mode=f["filterMode"],
+                code_uuids=list(f.get("codeUuids") or []),
                 value_concept_uuid=f.get("valueConceptUuid"),
                 value_bool=f.get("valueBool"),
                 operator=f.get("operator"),
@@ -557,6 +1029,7 @@ class ReportBuilderToolLoop:
                 label=d["label"],
                 code_uuid=d["codeUuid"],
                 filter_mode=d["filterMode"],
+                code_uuids=list(d.get("codeUuids") or []),
                 value_concept_uuid=d.get("valueConceptUuid"),
                 value_bool=d.get("valueBool"),
                 operator=d.get("operator"),
@@ -769,7 +1242,7 @@ def _dedupe_operations(operations: list[dict[str, Any]]) -> tuple[list[dict[str,
             continue
         op = str(operation.get("op") or "")
         key: tuple[Any, ...]
-        if op in {"add_filter", "remove_filter"}:
+        if op in {"add_filter", "remove_filter", "set_filter_value"}:
             key = (
                 op,
                 str(operation.get("conceptId") or operation.get("filterId") or ""),
@@ -793,6 +1266,88 @@ def _dedupe_operations(operations: list[dict[str, Any]]) -> tuple[list[dict[str,
     return out, dropped
 
 
+def _normalize_report_operations(
+    operations: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Recover common Gemma tool-grammar omissions without weakening validation.
+
+    The report operation grammar requires an explicit ``op`` value, but live
+    Gemma runs sometimes emit structurally clear objects like
+    ``{"reportType": "pivot"}`` or ``{"conceptId": "1479"}``. We infer only
+    unambiguous missing op names and leave the normal validator responsible for
+    concept safety, supported dimensions, date parsing, and report semantics.
+    """
+    normalized: list[dict[str, Any]] = []
+    notes: list[dict[str, Any]] = []
+    for operation in operations or []:
+        if not isinstance(operation, dict):
+            continue
+        op = dict(operation)
+        if str(op.get("op") or "").strip():
+            normalized.append(op)
+            continue
+
+        inferred: str | None = None
+        if op.get("reportType"):
+            inferred = "set_report_type"
+        elif op.get("text") or op.get("dateRangeLabel") or op.get("dateRange") or op.get("date_range"):
+            inferred = "set_date_range"
+        elif op.get("joinMode"):
+            inferred = "set_join_mode"
+        elif op.get("template") or op.get("visualization") or _visualization_template_from_operation(op):
+            inferred = "set_visualization"
+        elif op.get("dimension"):
+            inferred = "add_group_by"
+        elif op.get("kind"):
+            inferred = "set_denominator"
+        elif op.get("filterId") and any(k in op for k in ("valueConceptId", "valueBool", "operator", "numericThreshold")):
+            inferred = "set_filter_value"
+        elif op.get("conceptId") or op.get("valueConceptId"):
+            inferred = "add_filter"
+
+        if inferred:
+            op["op"] = inferred
+            notes.append({"before": operation, "after": op, "reason": "missing op inferred from fields"})
+        normalized.append(op)
+    return normalized, notes
+
+
+def _visualization_template_from_operation(operation: dict[str, Any]) -> str:
+    raw = (
+        operation.get("template")
+        or operation.get("visualization")
+        or operation.get("chartType")
+        or operation.get("chart")
+        or operation.get("title")
+        or operation.get("reason")
+    )
+    text = str(raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "line": "time_series_line",
+        "line_graph": "time_series_line",
+        "line_chart": "time_series_line",
+        "trend": "time_series_line",
+        "bar": "time_series_bar",
+        "bar_graph": "time_series_bar",
+        "bar_chart": "time_series_bar",
+        "heatmap": "pivot_heatmap",
+        "stacked_bar": "pivot_stacked_bar",
+    }
+    text = aliases.get(text, text)
+    allowed = {
+        "filter_bar",
+        "indicator_rate",
+        "pivot_grouped_bar",
+        "pivot_stacked_bar",
+        "pivot_heatmap",
+        "time_series_bar",
+        "time_series_line",
+        "stacked_time_series",
+        "rate_over_time",
+    }
+    return text if text in allowed else ""
+
+
 def _upsert_group_by(existing: list[GroupBy], new_group: GroupBy) -> list[GroupBy]:
     out: list[GroupBy] = []
     seen: set[tuple[str, str | None]] = set()
@@ -805,12 +1360,25 @@ def _upsert_group_by(existing: list[GroupBy], new_group: GroupBy) -> list[GroupB
     return out[-2:]
 
 
+def _normalize_report_type_for_grouping(spec: ReportSpec) -> None:
+    """Grouped count/cohort specs are semantically pivot reports.
+
+    This is a structural invariant rather than a clinical decision. If the
+    agent asks for `groupBy` but leaves reportType=count, the grouped dimensions
+    would otherwise be silently ignored by the result renderer.
+    """
+    if spec.group_by and spec.report_type in {"count", "cohort"}:
+        spec.report_type = "pivot"
+        spec.visualization = normalize_visualization(spec.report_type, spec.visualization, spec.group_by)
+
+
 def _filter_spec_from_compiled(f: CompiledFilter) -> FilterSpec:
     return FilterSpec(
         filter_id=f.filter_id,
         label=f.label,
         code_uuid=f.code_uuid,
         filter_mode=f.filter_mode,
+        code_uuids=f.code_uuids,
         value_concept_uuid=f.value_concept_uuid,
         value_bool=f.value_bool,
         operator=f.operator,
@@ -1057,13 +1625,21 @@ def _visualization_data(template: str, result: dict[str, Any]) -> dict[str, Any]
     if template == "indicator_rate":
         numerator = int(result.get("numerator") or 0)
         denominator = int(result.get("denominator") or 0)
+        numerator_label = _indicator_numerator_label(result)
+        denominator_label = str(result.get("denominatorLabel") or result.get("denominatorSource") or "Denominator")
+        remainder = max(0, denominator - numerator)
         return {
             "xLabel": "Metric",
             "yLabel": "Patients",
             "bars": [
-                {"label": "Numerator", "value": numerator},
-                {"label": "Denominator", "value": denominator},
+                {"label": numerator_label, "value": numerator},
+                {"label": f"Other patients ({denominator_label})", "value": remainder},
             ],
+            "numeratorLabel": numerator_label,
+            "denominatorLabel": denominator_label,
+            "numerator": numerator,
+            "denominator": denominator,
+            "remainder": remainder,
             "rate": result.get("rate"),
         }
     if template in {"pivot_grouped_bar", "pivot_stacked_bar", "pivot_heatmap", "stacked_time_series"}:
@@ -1135,6 +1711,18 @@ def _run_summary(result: dict[str, Any]) -> str:
         cols = pivot.get("colLabels") or []
         return f"pivot: {len(rows)} rows x {len(cols)} cols"
     return f"report: {report_type}"
+
+
+def _indicator_numerator_label(result: dict[str, Any]) -> str:
+    labels = [
+        str(item.get("label") or "").strip()
+        for item in (result.get("filterCounts") or [])
+        if str(item.get("label") or "").strip()
+    ]
+    if not labels:
+        return "Matching patients"
+    joiner = f" {(result.get('joinMode') or 'and').upper()} "
+    return joiner.join(labels)
 
 
 __all__ = [

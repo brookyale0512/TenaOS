@@ -37,8 +37,8 @@ Rules:
 - If the user asks "month by month", "month over month", "monthly", or "trend by month",
   set Type: pivot and Group by: date_month. Preserve the existing clinical filters.
 - Visualization is only intent. Use filter_bar for count/cohort, indicator_rate for
-  indicators, time_series_bar for month-by-month counts, time_series_line for trend
-  language, stacked_time_series when month-by-month is split by another dimension,
+  indicators, time_series_line for month-by-month / month-over-month counts,
+  stacked_time_series when month-by-month is split by another dimension,
   and rate_over_time for monthly indicator/rate reports. Use pivot_heatmap only when
   the user asks for an intensity grid or heatmap; use pivot_stacked_bar for
   non-temporal part-to-whole comparisons.

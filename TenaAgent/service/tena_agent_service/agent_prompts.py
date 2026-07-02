@@ -191,6 +191,20 @@ def form_tool_system() -> str:
     return load_prompt("form_tool_system.txt")
 
 
+def form_subject_assessment_system() -> str:
+    return load_prompt("form_subject_assessment_system.txt")
+
+
+def form_research_worklist_system() -> str:
+    """v2 pipeline Phase A: grounded research that emits a QuestionWorklist."""
+    return load_prompt("form_research_worklist_system.txt")
+
+
+def form_resolve_system() -> str:
+    """v2 pipeline Phase B: per-question CIEL resolution loop."""
+    return load_prompt("form_resolve_system.txt")
+
+
 def report_brainstorm_system() -> str:
     return load_prompt("report_brainstorm_system.txt")
 

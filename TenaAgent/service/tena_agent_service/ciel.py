@@ -21,13 +21,16 @@ Concept identity:
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .config import Settings
+
+_LOGGER = logging.getLogger("tenaos.tena_agent.ciel")
 
 
 def openmrs_uuid_for_concept_id(concept_id: str | int) -> str:
@@ -84,6 +87,7 @@ class CielClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._service: Any | None = None
+        self._sqlite_service: Any | None = None
         self._sqlite_path = settings.ciel_sqlite_path
         self._available_error: str | None = None
 
@@ -123,6 +127,11 @@ class CielClient:
             include_retired=False,
         )
         result = service.search_form_seeds(query, filters, limit=limit, seed_limit=seed_limit, expansion_depth=2)
+        if not result.recommended_seeds and service is not self._sqlite_only_service():
+            # Semantic discovery returned nothing (kb-ciel down/empty) -> FTS5.
+            result = self._sqlite_only_service().search_form_seeds(
+                query, filters, limit=limit, seed_limit=seed_limit, expansion_depth=2
+            )
         seeds: list[SeedHit] = []
         for recommendation in result.recommended_seeds:
             hit = recommendation.hit
@@ -160,6 +169,8 @@ class CielClient:
             include_retired=False,
         )
         hits = service.search_concepts(query, filters, limit=limit)
+        if not hits and service is not self._sqlite_only_service():
+            hits = self._sqlite_only_service().search_concepts(query, filters, limit=limit)
         return [
             SeedHit(
                 concept_id=str(hit.concept_id),
@@ -186,12 +197,32 @@ class CielClient:
             raise ConceptNotFoundError(str(exc)) from exc
 
     def expand_seed(self, concept_id: str, *, depth: int = 3, allow_retired: bool = False) -> dict[str, Any]:
-        bundle = self.get_concept_bundle(concept_id)
-        concept = bundle.get("concept", {})
-        if concept.get("retired") and not allow_retired:
-            raise RetiredConceptError(f"Concept {concept_id} is retired and is not allowed for new form construction.")
-        answers = bundle.get("answers", [])
-        set_members = bundle.get("set_members", [])
+        """Expand a concept into its answers, set members, and BFS form candidates.
+
+        Honors ``depth`` by delegating to ``CielSearchService.expand_seed`` (which
+        walks Q-AND-A / CONCEPT-SET edges breadth-first up to ``expansion_depth``)
+        rather than returning only the directly-attached relations. Falls back to
+        a direct depth-1 read when only the raw SQLite store is available.
+        """
+        service = self._ensure_service()
+        if service is _DirectSqliteSentinel:
+            return self._expand_seed_direct(concept_id, depth=depth, allow_retired=allow_retired)
+        try:
+            expanded = service.expand_seed(
+                str(concept_id), allow_retired=allow_retired, expansion_depth=max(1, int(depth))
+            )
+        except KeyError as exc:
+            raise ConceptNotFoundError(str(concept_id)) from exc
+        except ValueError as exc:
+            # Service signals a retired concept via ValueError; normalize the type.
+            raise RetiredConceptError(str(exc)) from exc
+        return self._shape_expansion(expanded, depth=depth)
+
+    def _shape_expansion(self, expanded: dict[str, Any], *, depth: int) -> dict[str, Any]:
+        concept = expanded.get("concept", {})
+        answers = expanded.get("answers", []) or []
+        set_members = expanded.get("set_members", []) or []
+        candidates = expanded.get("component_candidates", []) or []
         return {
             "concept": concept,
             "answers": [
@@ -214,8 +245,37 @@ class CielClient:
                 }
                 for rel in set_members
             ],
+            "componentCandidates": [
+                {
+                    "conceptId": str(c.get("concept_id", "")),
+                    "displayName": c.get("display_name", ""),
+                    "conceptClass": c.get("concept_class"),
+                    "datatype": c.get("datatype"),
+                    "answerCount": int(c.get("answer_count", 0) or 0),
+                    "setMemberCount": int(c.get("set_member_count", 0) or 0),
+                    "retired": bool(c.get("retired")),
+                    "role": c.get("role"),
+                    "path": c.get("path") or [],
+                }
+                for c in candidates
+            ],
             "depth": depth,
         }
+
+    def _expand_seed_direct(self, concept_id: str, *, depth: int, allow_retired: bool) -> dict[str, Any]:
+        bundle = self.get_concept_bundle(concept_id)
+        concept = bundle.get("concept", {})
+        if concept.get("retired") and not allow_retired:
+            raise RetiredConceptError(f"Concept {concept_id} is retired and is not allowed for new form construction.")
+        return self._shape_expansion(
+            {
+                "concept": concept,
+                "answers": bundle.get("answers", []),
+                "set_members": bundle.get("set_members", []),
+                "component_candidates": [],
+            },
+            depth=depth,
+        )
 
     def _ensure_service(self) -> Any:
         if self._service is not None:
@@ -240,14 +300,66 @@ class CielClient:
             )
         qdrant_search = self._maybe_build_qdrant_search()
         self._service = CielSearchService(self._sqlite_path, qdrant_search=qdrant_search)
+        if qdrant_search is None:
+            # No semantic layer: the primary service already is SQLite-only, so
+            # reuse it as the fallback to avoid a redundant second search.
+            self._sqlite_service = self._service
         return self._service
 
-    def _maybe_build_qdrant_search(self) -> Any | None:
-        # Semantic search over CIEL now lives in the TenaOS-KnowledgeBase-CIEL
-        # service (HTTP). TenaAgent no longer contacts Qdrant directly from the
-        # CIEL client — keep the hook so the public API stays compatible, but
-        # short-circuit to None.
-        return None
+    def _maybe_build_qdrant_search(self) -> Callable[..., list[tuple[str, float]]] | None:
+        """Build a semantic-discovery callable backed by the kb-ciel HTTP service.
+
+        Returns ``(query, filters, limit) -> [(concept_id, score)]`` that the
+        ``CielSearchService`` routes plain-language queries through; the service
+        then hydrates exact bundles from the local SQLite store. This realizes
+        the intended two-stage flow: semantic discovery (kb-ciel) -> exact code
+        resolution (SQLite). When the service is disabled or unreachable the
+        callable returns an empty list so the caller transparently falls back to
+        SQLite FTS5 search.
+        """
+        if not getattr(self.settings, "ciel_semantic_search", True):
+            return None
+        base_url = (self.settings.kb_ciel_url or "").strip()
+        if not base_url:
+            return None
+        try:
+            from .tool_loop import KbCielClient
+        except Exception as exc:  # pragma: no cover - import guard
+            _LOGGER.info("kb-ciel client unavailable; using SQLite FTS5: %s", exc)
+            return None
+        client = KbCielClient(base_url=base_url)
+
+        def _search(query: str, filters: Any, limit: int) -> list[tuple[str, float]]:
+            try:
+                hits = client.search(
+                    query,
+                    k=int(limit),
+                    concept_classes=getattr(filters, "concept_classes", None),
+                    datatypes=getattr(filters, "datatypes", None),
+                    include_retired=bool(getattr(filters, "include_retired", False)),
+                )
+            except Exception as exc:
+                _LOGGER.warning("kb-ciel semantic search failed (query=%r); falling back: %s", query, exc)
+                return []
+            out: list[tuple[str, float]] = []
+            for hit in hits or []:
+                cid = str(hit.get("concept_id") or "").strip()
+                if cid:
+                    out.append((cid, float(hit.get("score") or 0.0)))
+            return out
+
+        return _search
+
+    def _sqlite_only_service(self) -> Any:
+        """A CIEL service that always uses SQLite FTS5 (semantic fallback path)."""
+        cached = getattr(self, "_sqlite_service", None)
+        if cached is not None:
+            return cached
+        from ciel_search import CielSearchService  # type: ignore
+
+        service = CielSearchService(self._sqlite_path, qdrant_search=None)
+        self._sqlite_service = service
+        return service
 
     def _import(self, module_name: str, attribute: str) -> Any:
         module = __import__(module_name)

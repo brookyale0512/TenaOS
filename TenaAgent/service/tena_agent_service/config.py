@@ -5,8 +5,9 @@ All environment variables follow one of two namespaces:
 - ``TENAOS_*``      shared with the rest of TenaOS (LLM endpoint, KB URLs, CIEL paths)
 - ``TENA_AGENT_*``  TenaAgent-internal service settings (port, CORS, tuning constants)
 
-Legacy CDS_*, VLLM_*, KB_GUIDELINES_URL aliases have been removed in the
-public release. See CHANGELOG for the rename map if you are upgrading.
+Legacy CDS_*, older LLM-provider aliases, and KB_GUIDELINES_URL aliases have
+been removed in the public release. See CHANGELOG for the rename map if you
+are upgrading.
 """
 from __future__ import annotations
 
@@ -91,8 +92,26 @@ class Settings:
     form_agent_max_steps: int = 35
     form_agent_target_min_fields: int = 6
     form_agent_max_nudges: int = 2
+    form_agent_recovery_min_searches: int = 6
     form_agent_brainstorm_max_tokens: int = 1400
     form_agent_tool_max_tokens: int = 900
+    form_agent_subject_assessment: bool = False
+    form_agent_subject_max_searches: int = 5
+    form_agent_subject_max_tokens: int = 900
+    # When True, CIEL concept discovery queries the kb-ciel semantic service
+    # first (plain-language SapBERT search) and hydrates exact codes from the
+    # local SQLite store, falling back to SQLite FTS5 if kb-ciel is unreachable.
+    ciel_semantic_search: bool = True
+    # v2 grounded pipeline (research -> CIEL resolution -> repair). Now the
+    # default path: subject-matter research over WHO/MSF, then semantic CIEL
+    # discovery + exact SQLite resolution. Set FORM_AGENT_PIPELINE_V2=0 to fall
+    # back to the legacy runner.
+    form_agent_pipeline_v2: bool = True
+    form_agent_research_max_searches: int = 5
+    form_agent_research_max_tokens: int = 1100
+    # Resolution tool turns get a larger budget than the legacy 900 so a single
+    # multi-field update_form_draft call is not silently truncated.
+    form_agent_resolve_max_tokens: int = 1300
     report_agent_max_steps: int = 25
     report_agent_brainstorm_max_tokens: int = 1100
     report_agent_tool_max_tokens: int = 900
@@ -100,6 +119,10 @@ class Settings:
     fhir_obs_max_pages: int = 25
     fhir_demographics_chunk: int = 50
     cohort_max_patients: int = 500
+    # Public all-in-one deployments should require the browser's OpenMRS
+    # session before serving expensive agent endpoints. Kept opt-in for
+    # backend-only local development where callers may hit TenaAgent directly.
+    require_openmrs_session: bool = False
     # When True, agent_prompts.load_prompt() and tool_descriptions_registry()
     # prefer optimized/ overlay files when present. Production stays False
     # unless explicitly opted-in.
@@ -146,6 +169,10 @@ class Settings:
             ).resolve(),
             kb_guidelines_url=os.getenv("TENAOS_KB_GUIDELINES_URL", "http://localhost:4276"),
             kb_ciel_url=os.getenv("TENAOS_KB_CIEL_URL", "http://localhost:4277"),
+            ciel_semantic_search=(
+                os.getenv("TENAOS_CIEL_SEMANTIC_SEARCH", "1").strip().lower()
+                in {"1", "true", "yes", "on"}
+            ),
             # OpenMRS metadata UUIDs match the contract in
             # TenaOS-Backend/metadata/required-openmrs-metadata.json so the
             # scribe confirm endpoint works out-of-the-box with the reference
@@ -191,8 +218,22 @@ class Settings:
             form_agent_max_steps=int(os.getenv("FORM_AGENT_MAX_STEPS", "35")),
             form_agent_target_min_fields=int(os.getenv("FORM_AGENT_TARGET_MIN_FIELDS", "6")),
             form_agent_max_nudges=int(os.getenv("FORM_AGENT_MAX_NUDGES", "2")),
+            form_agent_recovery_min_searches=int(os.getenv("FORM_AGENT_RECOVERY_MIN_SEARCHES", "6")),
             form_agent_brainstorm_max_tokens=int(os.getenv("FORM_AGENT_BRAINSTORM_MAX_TOKENS", "1400")),
             form_agent_tool_max_tokens=int(os.getenv("FORM_AGENT_TOOL_MAX_TOKENS", "900")),
+            form_agent_subject_assessment=(
+                os.getenv("FORM_AGENT_SUBJECT_ASSESSMENT", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            ),
+            form_agent_subject_max_searches=int(os.getenv("FORM_AGENT_SUBJECT_MAX_SEARCHES", "5")),
+            form_agent_subject_max_tokens=int(os.getenv("FORM_AGENT_SUBJECT_MAX_TOKENS", "900")),
+            form_agent_pipeline_v2=(
+                os.getenv("FORM_AGENT_PIPELINE_V2", "1").strip().lower()
+                in {"1", "true", "yes", "on"}
+            ),
+            form_agent_research_max_searches=int(os.getenv("FORM_AGENT_RESEARCH_MAX_SEARCHES", "5")),
+            form_agent_research_max_tokens=int(os.getenv("FORM_AGENT_RESEARCH_MAX_TOKENS", "1100")),
+            form_agent_resolve_max_tokens=int(os.getenv("FORM_AGENT_RESOLVE_MAX_TOKENS", "1300")),
             report_agent_max_steps=int(os.getenv("REPORT_AGENT_MAX_STEPS", "25")),
             report_agent_brainstorm_max_tokens=int(os.getenv("REPORT_AGENT_BRAINSTORM_MAX_TOKENS", "1100")),
             report_agent_tool_max_tokens=int(os.getenv("REPORT_AGENT_TOOL_MAX_TOKENS", "900")),
@@ -200,6 +241,10 @@ class Settings:
             fhir_obs_max_pages=int(os.getenv("FHIR_OBS_MAX_PAGES", "25")),
             fhir_demographics_chunk=int(os.getenv("FHIR_DEMOGRAPHICS_CHUNK", "50")),
             cohort_max_patients=int(os.getenv("COHORT_MAX_PATIENTS", "500")),
+            require_openmrs_session=(
+                os.getenv("TENA_AGENT_REQUIRE_OPENMRS_SESSION", "").strip().lower()
+                in {"1", "true", "yes", "on"}
+            ),
             use_optimized_prompts=(
                 os.getenv("TENAOS_USE_OPTIMIZED_PROMPTS", "").strip().lower()
                 in {"1", "true", "yes", "on"}

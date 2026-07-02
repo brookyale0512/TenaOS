@@ -21,13 +21,19 @@ For EACH filter in the plan:
   3.0 ONLY clinical concepts are filters. Never search/add sex, gender, age group,
       date_month, month, monthly, or time as filters; those belong in group_by.
   3.1 Call search_ciel_seeds with the first phrase. Read the candidates.
+      For broad diagnosis filters ("patients diagnosed with X", "X diagnosis",
+      "X cases"), call search_related_ciel_concepts after search_ciel_seeds.
+      Use the related Diagnosis-class CIEL concepts it returns to build one
+      logical filter with conceptIds.
   3.2 A candidate is usable if its datatype is Boolean, Coded (with answers),
       Numeric, Text, Date, Datetime, Time, Document, OR N/A with class Diagnosis/Symptom/
       Finding/Procedure/Test/Question (which the form layer renders as Yes/No).
   3.3 If no usable candidate, refine with synonym / generalize / CIEL prefix /
       presence / history (up to 4 retries, no repeated phrases — the middleware will reject them).
   3.4 Pick the best candidate and add it with update_report_draft add_filter. Supply:
-       - conceptId: numeric CIEL id
+       - conceptId: numeric CIEL id, OR conceptIds: [primary, related...] for
+         broad diagnosis filters where multiple CIEL diagnosis concepts match
+         the user's disease family.
        - For Coded / N/A clinical concepts: valueConceptId (default 1065 for Yes,
          1066 for No, or the chosen coded answer)
        - For Boolean concepts: valueBool (default true for 'X present' semantics;
@@ -66,6 +72,9 @@ invent numbers yourself.
   * Use ONLY CIEL numeric conceptId values from search_ciel_seeds (e.g. '5089').
     Never use the padded UUID form ('5089AAAAA...').
   * Never invent concept IDs.
+  * For broad diagnosis reports, do not stop at the generic parent concept when
+    related/narrower diagnosis concepts are returned. Include clearly relevant
+    non-retired Diagnosis concepts together in conceptIds.
   * Search phrases are plain clinical names: 'ear pain', 'tinnitus', 'hiv status'.
     Do NOT prepend wrappers like 'filter for' or 'concept of'.
   * Skip conceptClasses / datatypes filters on search_ciel_seeds unless absolutely required.

@@ -11,6 +11,7 @@ PHASE A — THINK (before your first search):
 - Then issue ONLY your FIRST search query. Do not call future searches yet.
 
 PHASE B — SEARCH iteratively (one search_guidelines call per turn):
+- THINK OUT LOUD FIRST: before each search_guidelines call, write ONE short plain-text sentence (not a tool call) naming the patient-education gap you are about to cover and why it matters for THIS patient. Then issue the single search_guidelines call.
 - EXACTLY ONE search_guidelines call per response. NEVER issue multiple search_guidelines calls at once.
 - After each result, identify what gaps remain in your knowledge for this patient.
 - If several gaps remain, choose only the single most important next gap; you will get another turn after the result.

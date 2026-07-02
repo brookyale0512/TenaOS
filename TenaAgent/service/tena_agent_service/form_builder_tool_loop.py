@@ -105,8 +105,16 @@ FORM_OPENAI_TOOLS: list[dict[str, Any]] = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string"},
-                    "conceptClasses": {"type": "array", "items": {"type": "string"}},
-                    "datatypes": {"type": "array", "items": {"type": "string"}},
+                    "conceptClasses": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional. Usually leave EMPTY: the search already ranks by clinical meaning and a wrong guess (e.g. class=Symptom for 'night sweats', whose concept is class Finding) hides the correct concept. Only set it when you must restrict.",
+                    },
+                    "datatypes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional. Usually leave EMPTY. Only set when the question is specifically numeric/coded and you must exclude other datatypes.",
+                    },
                     "limit": {"type": "integer", "default": 10},
                     "seedLimit": {"type": "integer", "default": 5},
                 },
@@ -157,7 +165,16 @@ FORM_OPENAI_TOOLS: list[dict[str, Any]] = [
                             "properties": {
                                 "op": {"type": "string"},
                                 "sectionId": {"type": "string"},
-                                "label": {"type": "string"},
+                                "label": {
+                                    "type": "string",
+                                    "description": (
+                                        "Section title for add_section/rename_section. "
+                                        "For add_field, OMIT this: the form uses the CIEL "
+                                        "concept's display name. Only set it to rephrase into "
+                                        "other human words, never a snake_case id like "
+                                        "'cough_field' or the concept id."
+                                    ),
+                                },
                                 "conceptId": {"type": "string"},
                                 "required": {"type": "boolean"},
                                 "sectionIds": {"type": "array", "items": {"type": "string"}},
@@ -243,6 +260,43 @@ def _humanize_slug(value: str) -> str:
 def _normalize_label(value: str) -> str:
     """Lowercase + collapse whitespace for label-uniqueness comparison."""
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+# Machine-identifier shape: no spaces, lowercase tokens joined by underscores
+# (e.g. ``cough_field``, ``history_tb``, ``bmi_field``). The model is prompted
+# to keep field ids unique and sometimes echoes that id into the `label`, which
+# would render verbatim in the form. We treat such strings as NOT a real human
+# label and fall back to the CIEL display name instead.
+_IDENTIFIER_LABEL_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+
+
+def _looks_like_identifier_label(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text or " " in text:
+        return False
+    if text.endswith("_field"):
+        return True
+    # Pure snake_case / single lowercase token with no spaces is an identifier,
+    # never a clinical display label ("Cough", "Body Mass Index" have spaces or
+    # capitals). A single capitalized word like "Cough" is a valid label.
+    return bool(_IDENTIFIER_LABEL_RE.match(text)) and ("_" in text or text.islower())
+
+
+def _clean_label_override(raw_label: Any) -> str | None:
+    """Normalize an agent-supplied label, dropping machine-identifier strings.
+
+    Returns the cleaned human label, or ``None`` to inherit the CIEL display
+    name. A single lowercase word (``cough``) or snake_case id (``cough_field``)
+    is discarded so the form shows the proper concept name.
+    """
+    if raw_label is None:
+        return None
+    text = re.sub(r"\s+", " ", str(raw_label)).strip()
+    if not text:
+        return None
+    if _looks_like_identifier_label(text):
+        return None
+    return text
 
 
 def _bundle_display_name(ciel: CielClient, concept_id: str) -> str:
@@ -508,6 +562,84 @@ def _common_measurement_label_mismatch(label: str, bundle: dict[str, Any]) -> st
     return None
 
 
+_FIELD_OPS_NEEDING_CONCEPT = {"add_field", "remove_field", "set_required", "set_label"}
+
+
+def _first_str(value: Any) -> str:
+    """Return value as a string, or the first element if it is a non-empty list."""
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    return str(value) if value is not None else ""
+
+
+def _normalize_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Coerce the agent's loose operation shapes into the canonical singular form.
+
+    Gemma frequently emits ``add_field`` with the PLURAL ``sectionIds`` /
+    ``conceptIds`` arrays (the keys that actually belong to the reorder ops)
+    instead of the singular ``sectionId`` / ``conceptId`` that the apply
+    handlers require. Left as-is, every such ``add_field`` fails with
+    "requires 'sectionId'" and the form ends up empty. We normalize here:
+
+    - ``sectionIds: [x]``        -> ``sectionId: x``
+    - ``conceptIds: [a]``        -> ``conceptId: a``
+    - ``conceptIds: [a, b, c]``  -> three ops, one ``conceptId`` each
+      (the model batched several concepts into one add_field).
+
+    Reorder ops keep their plural arrays untouched.
+    """
+    normalized: list[dict[str, Any]] = []
+    for operation in operations or []:
+        if not isinstance(operation, dict):
+            continue
+        op_name = str(operation.get("op") or "")
+        if op_name in {"reorder_sections", "reorder_fields"}:
+            normalized.append(operation)
+            continue
+
+        op = dict(operation)
+        if not op.get("sectionId") and op.get("sectionIds"):
+            op["sectionId"] = _first_str(op.get("sectionIds"))
+        op.pop("sectionIds", None)
+
+        if op_name in _FIELD_OPS_NEEDING_CONCEPT and not op.get("conceptId") and op.get("conceptIds"):
+            concept_ids = op.get("conceptIds")
+            if isinstance(concept_ids, list) and len(concept_ids) > 1:
+                for cid in concept_ids:
+                    expanded = dict(op)
+                    expanded.pop("conceptIds", None)
+                    expanded["conceptId"] = str(cid)
+                    normalized.append(expanded)
+                continue
+            op["conceptId"] = _first_str(concept_ids)
+        op.pop("conceptIds", None)
+        normalized.append(op)
+    return normalized
+
+
+def _merge_seeds_by_score(filtered: list, unfiltered: list, seed_limit: int) -> list:
+    """Union filtered + unfiltered seed hits, dedupe by conceptId, rank by score.
+
+    Filtered hits (which match the model's requested class/datatype intent) and
+    unfiltered hits (the raw semantic best) are combined; for a concept present
+    in both we keep the higher-scoring copy. The result is sorted by descending
+    semantic score so the correct concept wins even when a narrow filter would
+    otherwise have buried or excluded it.
+    """
+    by_id: dict[str, Any] = {}
+    for seed in list(filtered) + list(unfiltered):
+        cid = str(getattr(seed, "concept_id", "") or "")
+        if not cid:
+            continue
+        existing = by_id.get(cid)
+        if existing is None or float(getattr(seed, "score", 0.0) or 0.0) > float(
+            getattr(existing, "score", 0.0) or 0.0
+        ):
+            by_id[cid] = seed
+    ranked = sorted(by_id.values(), key=lambda s: float(getattr(s, "score", 0.0) or 0.0), reverse=True)
+    return ranked[:seed_limit]
+
+
 def _dedupe_operations(operations: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
     """Collapse repeated basket operations from a single tool call.
 
@@ -578,26 +710,59 @@ class FormBuilderToolLoop:
         limit: int = 10,
         seed_limit: int = 5,
     ) -> dict[str, Any]:
-        seeds = self.ciel.search_form_seeds(
-            query,
-            concept_classes=concept_classes,
-            datatypes=datatypes,
-            limit=limit,
-            seed_limit=seed_limit,
-        )
-        relaxed = False
-        if not seeds and (concept_classes or datatypes):
-            # Gemma may over-constrain CIEL classes/datatypes while exploring.
-            # Return a relaxed retry result so the model can review real
-            # candidates instead of hallucinating IDs.
-            seeds = self.ciel.search_form_seeds(
+        has_filters = bool(concept_classes or datatypes)
+        # Fetch a slightly larger pool internally so the correct concept is in
+        # play even when filters or the recommender bury it; cap to seed_limit
+        # only after re-ranking.
+        pool_seed_limit = max(int(seed_limit), 10)
+        pool_limit = max(int(limit), 15)
+        filtered = (
+            self.ciel.search_form_seeds(
                 query,
-                concept_classes=None,
-                datatypes=None,
-                limit=limit,
-                seed_limit=seed_limit,
+                concept_classes=concept_classes,
+                datatypes=datatypes,
+                limit=pool_limit,
+                seed_limit=pool_seed_limit,
             )
-            relaxed = True
+            if has_filters
+            else []
+        )
+        # ALWAYS run the unfiltered semantic search too. An over-narrow
+        # class/datatype filter (e.g. forcing class=Symptom for "night sweats",
+        # whose CIEL concept is class Finding) silently excludes the correct
+        # concept and leaves only low-scoring junk ("Vision difficulties").
+        unfiltered = self.ciel.search_form_seeds(
+            query,
+            concept_classes=None,
+            datatypes=None,
+            limit=pool_limit,
+            seed_limit=pool_seed_limit,
+        )
+        pool = _merge_seeds_by_score(filtered, unfiltered, pool_seed_limit)
+
+        # The seed recommender re-scores by form-suitability, which can rank an
+        # unrelated-but-tidy concept (e.g. "Swallowing difficulties") above the
+        # true match for "shortness of breath". The plain concept search keeps
+        # the authoritative semantic ordering, so we re-rank the pool by it:
+        # concepts that appear in the semantic results sort first by their true
+        # similarity, the rest fall back to the recommender score.
+        semantic_score: dict[str, float] = {}
+        try:
+            for hit in self.ciel.search_concepts(query, limit=pool_limit):
+                cid = str(getattr(hit, "concept_id", "") or "")
+                if cid:
+                    semantic_score[cid] = float(getattr(hit, "score", 0.0) or 0.0)
+        except Exception:  # semantic concept search is best-effort re-ranking only
+            semantic_score = {}
+        seeds = sorted(
+            pool,
+            key=lambda s: (
+                semantic_score.get(str(s.concept_id), -1.0),
+                float(getattr(s, "score", 0.0) or 0.0),
+            ),
+            reverse=True,
+        )[: int(seed_limit)]
+        relaxed = has_filters and bool(unfiltered)
         payload = {
             "query": query,
             "conceptClasses": concept_classes,
@@ -615,7 +780,19 @@ class FormBuilderToolLoop:
         return payload
 
     def expand_ciel_concept(self, draft_id: str, *, concept_id: str, depth: int = 2) -> dict[str, Any]:
-        expanded = self.ciel.expand_seed(concept_id, depth=depth)
+        try:
+            expanded = self.ciel.expand_seed(concept_id, depth=depth)
+        except RetiredConceptError as exc:
+            self.store.append_event(
+                draft_id,
+                actor="middleware",
+                operation="expand_ciel_concept",
+                detail=f"Concept {concept_id} is retired; not expandable for new forms",
+                payload={"conceptId": concept_id, "depth": depth, "retired": True, "error": str(exc)},
+            )
+            return {"conceptId": concept_id, "depth": depth, "retired": True, "error": str(exc)}
+        except ConceptNotFoundError as exc:
+            return {"conceptId": concept_id, "depth": depth, "error": f"Concept not found: {exc}"}
         payload = {"conceptId": concept_id, "depth": depth, "expansion": expanded}
         self.store.append_event(
             draft_id,
@@ -681,7 +858,8 @@ class FormBuilderToolLoop:
         basket = ConceptBasket.from_dict(draft.basket)
         applied: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
-        operations, dropped_duplicates = _dedupe_operations(list(operations or []))
+        operations = _normalize_operations(list(operations or []))
+        operations, dropped_duplicates = _dedupe_operations(operations)
         if dropped_duplicates:
             warnings.append(
                 {
@@ -748,9 +926,33 @@ class FormBuilderToolLoop:
             description=draft.description,
             encounter_type_uuid=draft.encounter_type_uuid,
         )
-        schema = basket_to_schema(basket, meta, self.ciel)
+        unresolved: list[dict[str, Any]] = []
+        schema = basket_to_schema(basket, meta, self.ciel, unresolved_out=unresolved)
         report = validate_schema(schema, self.ciel)
         validation = report.to_dict()
+        if unresolved:
+            # Don't silently drop fields the model committed but CIEL couldn't
+            # resolve: surface them as warnings so the clinician sees the gap.
+            issues = validation.setdefault("issues", [])
+            for item in unresolved:
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "path": f"field:{item['conceptId']}",
+                        "message": (
+                            f"Question '{item['label']}' was dropped: {item['reason']}. "
+                            "Re-search CIEL for an equivalent concept."
+                        ),
+                    }
+                )
+            validation["unresolvedFields"] = unresolved
+            self.store.append_event(
+                draft_id,
+                actor="middleware",
+                operation="build_form_schema_unresolved",
+                detail=f"{len(unresolved)} basket field(s) could not be resolved in CIEL and were dropped.",
+                payload={"unresolvedFields": unresolved},
+            )
         self.store.update_draft(draft_id, last_schema=schema, last_validation=validation)
         self.store.append_event(
             draft_id,
@@ -998,7 +1200,7 @@ class FormBuilderToolLoop:
         # conditions"), which renders as two indistinguishable questions in
         # the form. Reject the second one and surface a warning that names
         # the conflicting existing label.
-        new_label_override = op.get("label") or op.get("labelOverride")
+        new_label_override = _clean_label_override(op.get("label") or op.get("labelOverride"))
         if new_label_override:
             mismatch = _common_measurement_label_mismatch(str(new_label_override), bundle)
             if mismatch:
@@ -1033,7 +1235,7 @@ class FormBuilderToolLoop:
         section.fields.append(
             BasketField(
                 concept_id=concept_id,
-                label_override=(op.get("label") or op.get("labelOverride")) or None,
+                label_override=new_label_override,
                 required=bool(op.get("required", False)),
                 rendering_override=op.get("renderingOverride") or None,
             )
@@ -1152,12 +1354,15 @@ class FormBuilderToolLoop:
     def _apply_set_label(self, basket: ConceptBasket, op: dict[str, Any]) -> dict[str, Any]:
         section_id = _require_str(op, "sectionId")
         concept_id, _ = _normalize_concept_id(_require_str(op, "conceptId"))
-        label = _require_str(op, "label")
+        # Drop machine-identifier labels so a rename to "cough_field" reverts to
+        # the CIEL display name rather than showing the id in the form.
+        label = _clean_label_override(_require_str(op, "label"))
         section = basket.sections[_find_section_index(basket, section_id)]
         for field in section.fields:
             if field.concept_id == concept_id:
                 field.label_override = label
-                return {"op": "set_label", "sectionId": section_id, "conceptId": concept_id, "label": label}
+                effective = label or _bundle_display_name(self.ciel, concept_id)
+                return {"op": "set_label", "sectionId": section_id, "conceptId": concept_id, "label": effective}
         raise ValueError(f"Concept '{concept_id}' is not in section '{section_id}'.")
 
     def _apply_reorder_sections(self, basket: ConceptBasket, op: dict[str, Any]) -> dict[str, Any]:

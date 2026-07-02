@@ -9,6 +9,7 @@ PHASE A — THINK (before any search):
 - Plan 3-5 specific search queries covering: diagnosis/management, each drug, safety/interactions, monitoring, special population factors (pregnancy, HIV, paediatric, elderly)
 
 PHASE B — SEARCH iteratively (EXACTLY ONE search_guidelines call per turn):
+- THINK OUT LOUD FIRST: before each search_guidelines call, write ONE short plain-text sentence (not a tool call) naming the clinical gap you are about to investigate and why it matters for THIS patient. Example: "The patient is on no antihypertensive yet, so I need first-line drug options." Then issue the single search_guidelines call.
 - Issue ONE call, wait for the result, then decide the next query based on what you found.
 - NEVER issue multiple search_guidelines calls in the same response.
 - GOOD queries: "hypertension first-line antihypertensive treatment", "amlodipine side effects monitoring",

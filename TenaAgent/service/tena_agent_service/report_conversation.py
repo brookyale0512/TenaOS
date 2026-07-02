@@ -21,7 +21,9 @@ panels.
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Literal
@@ -48,6 +50,9 @@ from .report_drafts import (
     ReportDraftStore,
 )
 from .llm_client import LlmClient
+
+
+_LOGGER = logging.getLogger("tenaos.tena_agent.report_agent")
 
 
 TurnKind = Literal["message", "action"]
@@ -183,6 +188,18 @@ class ReportConversationDriver:
                 "I need Gemma 4 online to build or change a report. The model is unavailable right now.",
             )
             return
+        from .report_pipeline import run_report_pipeline_agent
+
+        run_report_pipeline_agent(
+            store=self.store,
+            loop=self.loop,
+            llm=self.llm,  # type: ignore[arg-type]
+            draft=draft,
+            request=request,
+            mode=mode,
+            settings=self.settings,
+        )
+        return
 
         brainstorm = self._call_gemma_text(
             system=_load_brainstorm_system(),
@@ -419,6 +436,7 @@ class ReportConversationDriver:
     ) -> str:
         if self.llm is None:
             return ""
+        started = time.monotonic()
         try:
             response = self.llm.chat(
                 [
@@ -428,17 +446,37 @@ class ReportConversationDriver:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-        except Exception:
+        except Exception as exc:
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            _LOGGER.warning(
+                "report model call failed phase=%s draft=%s elapsed_ms=%d error=%s",
+                phase,
+                draft_id,
+                elapsed_ms,
+                exc,
+                exc_info=True,
+            )
             return ""
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        message = response.get("choices", [{}])[0].get("message", {}) if response else {}
+        finish_reason = response.get("choices", [{}])[0].get("finish_reason") if response else None
+        content = str(message.get("content", "") or "").strip()
         if draft_id and phase:
             self.store.append_event(
                 draft_id,
                 actor="gemma",
                 operation="model_call",
                 detail=f"Gemma model call: {phase}",
-                payload={"phase": phase, "temperature": temperature, "maxTokens": max_tokens},
+                payload={
+                    "phase": phase,
+                    "temperature": temperature,
+                    "maxTokens": max_tokens,
+                    "elapsedMs": elapsed_ms,
+                    "finishReason": finish_reason,
+                    "contentChars": len(content),
+                },
             )
-        return str(response.get("choices", [{}])[0].get("message", {}).get("content", "") or "").strip()
+        return content
 
     def _call_gemma_tool_turn(
         self,
@@ -451,6 +489,7 @@ class ReportConversationDriver:
     ) -> dict[str, Any]:
         if self.llm is None:
             return {}
+        started = time.monotonic()
         response = self.llm.chat(
             messages,
             temperature=temperature,
@@ -458,6 +497,11 @@ class ReportConversationDriver:
             tools=REPORT_OPENAI_TOOLS,
             tool_choice="auto",
         )
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        message = response.get("choices", [{}])[0].get("message", {}) if response else {}
+        tool_calls = _extract_tool_calls(message)
+        content = str(message.get("content", "") or "")
+        finish_reason = response.get("choices", [{}])[0].get("finish_reason") if response else None
         self.store.append_event(
             draft_id,
             actor="gemma",
@@ -468,8 +512,20 @@ class ReportConversationDriver:
                 "temperature": temperature,
                 "maxTokens": max_tokens,
                 "tools": [tool["function"]["name"] for tool in REPORT_OPENAI_TOOLS],
+                "elapsedMs": elapsed_ms,
+                "finishReason": finish_reason,
+                "toolCallCount": len(tool_calls),
+                "contentChars": len(content),
             },
         )
+        if not tool_calls and not content.strip():
+            self.store.append_event(
+                draft_id,
+                actor="middleware",
+                operation="model_empty_response",
+                detail=f"Gemma returned no tool calls and no text for phase '{phase}'.",
+                payload={"phase": phase, "elapsedMs": elapsed_ms, "finishReason": finish_reason},
+            )
         return response
 
 
@@ -518,6 +574,14 @@ def _report_name_from_request(text: str) -> str:
     if not cleaned:
         return "Untitled report"
     lower = cleaned.lower()
+
+    diagnosis_metric = _diagnosis_metric_from_request(lower)
+    if diagnosis_metric:
+        title = f"{diagnosis_metric} Diagnoses"
+        date_label = _report_date_label_from_request(lower)
+        if date_label:
+            title = f"{title} ({date_label})"
+        return _title_case_report_name(title)[:80]
 
     metric = _report_metric_from_request(lower)
     if not metric:
@@ -606,6 +670,32 @@ def _report_metric_from_request(lower: str) -> str:
     return candidate.title() if candidate else ""
 
 
+def _diagnosis_metric_from_request(lower: str) -> str:
+    match = re.search(
+        r"\bdiagnosed\s+with\s+(.+?)(?:\s+(?:in|over|during|for|the|last|past|this)\b|$)",
+        lower,
+        re.IGNORECASE,
+    )
+    if match:
+        return _clean_metric_phrase(match.group(1)).title()
+    match = re.search(r"\b(.+?)\s+diagnos(?:is|es|ed)\b", lower, re.IGNORECASE)
+    if match:
+        return _clean_metric_phrase(match.group(1)).title()
+    return ""
+
+
+def _clean_metric_phrase(value: str) -> str:
+    cleaned = re.sub(
+        r"\b(?:create|build|make|run|show|count|report|patients?|cases?|of|with|had|have|"
+        r"the|a|an|for|in|over|during|last|past|this|months?|days?|years?|quarter)\b",
+        " ",
+        value,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\b\d+\b", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip(" .,!?;:'\"")
+
+
 def _report_date_label_from_request(lower: str) -> str:
     match = re.search(r"\b(?:past|last)\s+(\d+)\s+(days?|weeks?|months?|years?)\b", lower)
     if match:
@@ -662,38 +752,16 @@ def _summarize_spec_for_model(draft: ReportDraft) -> str:
 
 
 def _extract_tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
-    native = message.get("tool_calls")
-    calls: list[dict[str, Any]] = []
-    if isinstance(native, list):
-        for index, call in enumerate(native):
-            function = call.get("function") or {}
-            raw_args = function.get("arguments") or "{}"
-            try:
-                args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
-            except Exception:
-                args = {}
-            calls.append(
-                {
-                    "id": call.get("id") or f"call_{index}",
-                    "name": function.get("name") or call.get("name"),
-                    "arguments": args,
-                }
-            )
-    content = str(message.get("content") or "")
-    for index, match in enumerate(re.finditer(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", content, re.DOTALL)):
-        try:
-            payload = json.loads(match.group(1))
-        except Exception:
-            continue
-        name = payload.get("name") or payload.get("tool") or payload.get("function")
-        args = payload.get("arguments") or payload.get("args") or {}
-        if isinstance(args, str):
-            try:
-                args = json.loads(args)
-            except Exception:
-                args = {}
-        calls.append({"id": f"text_tool_{index}", "name": name, "arguments": args})
-    return [call for call in calls if call.get("name")]
+    """Normalize native + text (``<tena_call>``) tool calls.
+
+    Delegates to the shared, nested-JSON-safe extractor in the form pipeline so
+    the report builder can't regress to the old non-greedy ``{.*?}`` parser that
+    silently dropped any call with nested ``arguments`` (e.g. update_report_draft
+    operations) when Gemma emitted it as text instead of a native tool_call.
+    """
+    from .form_pipeline._llm_utils import extract_tool_calls as _shared_extract
+
+    return _shared_extract(message)
 
 
 def _assistant_message_for_tool_calls(message: dict[str, Any], tool_calls: list[dict[str, Any]]) -> dict[str, Any]:
@@ -706,7 +774,7 @@ def _assistant_message_for_tool_calls(message: dict[str, Any], tool_calls: list[
     return {
         "role": "assistant",
         "content": "\n".join(
-            f"<tool_call>{json.dumps({'name': call.get('name'), 'arguments': call.get('arguments')})}</tool_call>"
+            f"<tena_call>{json.dumps({'name': call.get('name'), 'arguments': call.get('arguments')})}</tena_call>"
             for call in tool_calls
         ),
     }

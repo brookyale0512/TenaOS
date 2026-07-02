@@ -1,0 +1,35 @@
+[
+  {
+    "id": "cough_count",
+    "request": "How many patients had cough last quarter?",
+    "expectedReportType": "count",
+    "requiredConceptIds": ["1487"]
+  },
+  {
+    "id": "hiv_positive_cohort",
+    "request": "Show a cohort of HIV positive patients this year.",
+    "expectedReportType": "cohort",
+    "requiredConceptIds": ["1063"]
+  },
+  {
+    "id": "monthly_cough_rate",
+    "request": "Show the monthly cough rate among patients seen over the last 6 months.",
+    "expectedReportType": "indicator",
+    "requiredConceptIds": ["1487"],
+    "requiredGroupBy": ["date_month"],
+    "requiresDenominator": true
+  },
+  {
+    "id": "cough_by_sex_age",
+    "request": "Show cough cases by sex and age group.",
+    "expectedReportType": "pivot",
+    "requiredConceptIds": ["1487"],
+    "requiredGroupBy": ["sex", "age_group"]
+  },
+  {
+    "id": "weight_over_threshold",
+    "request": "Count patients with weight over 60 kg.",
+    "expectedReportType": "count",
+    "requiredConceptIds": ["5089"]
+  }
+]

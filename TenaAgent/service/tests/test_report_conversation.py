@@ -136,7 +136,7 @@ class KickoffAndNameTurnTests(_DriverTestBase):
         d = self.store.get_draft(draft.draft_id)
         # Name should have been derived from the request.
         self.assertNotEqual(d.name, "Untitled report")
-        self.assertEqual(d.name, "Cough Count")
+        self.assertEqual(d.name, "Cough Count (Last Quarter)")
 
     def test_report_name_from_request_is_short_and_clinical(self) -> None:
         self.assertEqual(
@@ -150,6 +150,10 @@ class KickoffAndNameTurnTests(_DriverTestBase):
         self.assertEqual(
             _report_name_from_request("Show the monthly weight loss rate among patients seen over the past 6 months."),
             "Weight Loss Rate (Last 6 Months)",
+        )
+        self.assertEqual(
+            _report_name_from_request("create a report of patients diagnosed with malaria the past 12 months"),
+            "Malaria Diagnoses (Last 12 Months)",
         )
 
     def test_report_name_prefers_brainstorm_name(self) -> None:
@@ -173,7 +177,18 @@ class AgentLoopTests(_DriverTestBase):
             ]
         }
         canned = [
-            "Brainstorm",
+            _tool_message(
+                "finalize_report_plan",
+                {
+                    "summary": "Cough count last quarter",
+                    "title": "Cough Count",
+                    "reportType": "count",
+                    "dateRange": "last quarter",
+                    "filters": [{"label": "Cough", "searchPhrases": ["cough"], "valueKind": "presence"}],
+                    "visualization": "filter_bar",
+                },
+                "p1",
+            ),
             _tool_message(
                 "update_report_draft",
                 {
@@ -223,7 +238,20 @@ class NestedLogicWarningTests(_DriverTestBase):
             "1479AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA": [_obs_entry("p2", valueBoolean=True)],
         }
         canned = [
-            "Brainstorm",
+            _tool_message(
+                "finalize_report_plan",
+                {
+                    "summary": "Nested cough and night sweats report",
+                    "reportType": "count",
+                    "dateRange": "last quarter",
+                    "joinMode": "and",
+                    "filters": [
+                        {"label": "Cough", "searchPhrases": ["cough"], "valueKind": "presence"},
+                        {"label": "Night sweats", "searchPhrases": ["night sweats"], "valueKind": "presence"},
+                    ],
+                },
+                "p1",
+            ),
             _tool_message(
                 "update_report_draft",
                 {

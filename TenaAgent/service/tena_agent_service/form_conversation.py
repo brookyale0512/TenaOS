@@ -503,6 +503,20 @@ class FormConversationDriver:
                 "I need Gemma 4 online to create or edit forms in this workspace. The model is unavailable right now.",
             )
             return
+        if getattr(self.settings, "form_agent_pipeline_v2", False):
+            # v2 grounded pipeline: research -> CIEL resolution -> repair.
+            from .form_pipeline import run_form_pipeline_agent
+
+            run_form_pipeline_agent(
+                store=self.store,
+                loop=self.loop,
+                llm=self.llm,  # type: ignore[arg-type]
+                draft=draft,
+                request=request,
+                mode=mode,
+                settings=self.settings,
+            )
+            return
         run_gemma_tool_agent(
             store=self.store,
             loop=self.loop,

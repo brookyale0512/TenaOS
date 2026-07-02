@@ -28,6 +28,17 @@ from ..report_drafts import ReportDraft, ReportDraftNotFoundError, ReportDraftSt
 _LOG = logging.getLogger("tenaos.tena_agent.reports")
 
 _REPORT_STORE: ReportDraftStore | None = None
+_REPORT_LOCKS: dict[str, threading.Lock] = {}
+_REPORT_LOCKS_GUARD = threading.Lock()
+
+
+def _draft_lock(draft_id: str) -> threading.Lock:
+    with _REPORT_LOCKS_GUARD:
+        lock = _REPORT_LOCKS.get(draft_id)
+        if lock is None:
+            lock = threading.Lock()
+            _REPORT_LOCKS[draft_id] = lock
+        return lock
 
 
 def _get_report_store(settings: Settings) -> ReportDraftStore:
@@ -89,7 +100,8 @@ def _run_report_conversation_turn(
     started = time.monotonic()
     _LOG.info("report-draft=%s turn=%s start", draft_id, turn.kind if turn else "?")
     try:
-        driver.handle_user_turn(draft_id, turn)
+        with _draft_lock(draft_id):
+            driver.handle_user_turn(draft_id, turn)
         _LOG.info(
             "report-draft=%s turn=%s ok elapsed=%.2fs",
             draft_id, turn.kind, time.monotonic() - started,
@@ -240,8 +252,9 @@ class ReportRoutesMixin:
             self._send_json({"error": "Report draft not found"}, HTTPStatus.NOT_FOUND)
             return
         loop = self._build_report_tool_loop()
-        update_result = loop.update_report_draft(draft_id, operations, actor="user")
-        build_result = loop.build_report_query(draft_id)
+        with _draft_lock(draft_id):
+            update_result = loop.update_report_draft(draft_id, operations, actor="user")
+            build_result = loop.build_report_query(draft_id)
         self._send_json({"update": update_result, "build": build_result})
     def _handle_run_report(self, draft_id: str) -> None:
         store = _get_report_store(self.settings)
@@ -251,9 +264,15 @@ class ReportRoutesMixin:
             self._send_json({"error": "Report draft not found"}, HTTPStatus.NOT_FOUND)
             return
         loop = self._build_report_tool_loop()
-        # Compile if needed, then run.
-        build_result = loop.build_report_query(draft_id)
-        run_result = loop.run_report(draft_id)
+        with _draft_lock(draft_id):
+            # Compile first for a user-visible validation payload, then run
+            # through run_report's own fresh compile guard.
+            build_result = loop.build_report_query(draft_id)
+            run_result = loop.run_report(draft_id) if build_result.get("compiled") else {
+                "success": False,
+                "error": "Query has validation errors; cannot run.",
+                "validation": build_result.get("validation"),
+            }
         self._send_json({"build": build_result, "run": run_result})
     def _handle_delete_report_draft(self, draft_id: str) -> None:
         store = _get_report_store(self.settings)

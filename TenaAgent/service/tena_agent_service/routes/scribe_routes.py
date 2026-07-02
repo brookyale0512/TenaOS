@@ -54,6 +54,7 @@ from .deps import (
 # ---------------------------------------------------------------------------
 
 SCRIBE_TRACES: dict[str, ScribeTrace] = {}
+_MAX_VOICE_BODY_BYTES = 100 * 1024 * 1024
 
 _SCRIBE_TRACE_STORE: InsightTraceStore | None = None
 
@@ -176,6 +177,9 @@ class ScribeRoutesMixin:
         length = int(self.headers.get("Content-Length") or 0)
         if length == 0:
             self._send_json({"error": "empty body"}, HTTPStatus.BAD_REQUEST)
+            return
+        if length > _MAX_VOICE_BODY_BYTES:
+            self._send_json({"error": "Request body too large"}, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
             return
 
         raw_body = self.rfile.read(length)
@@ -453,6 +457,8 @@ class ScribeRoutesMixin:
             if m.get("uuid")
         ]
 
+        encounter_datetime_override = (body.get("encounterDatetime") or "").strip()
+
         if not patient_uuid or not visit_uuid or not soap_text:
             self._send_json({"error": "patientUuid, visitUuid, and soapText are required"}, HTTPStatus.BAD_REQUEST)
             return
@@ -493,7 +499,7 @@ class ScribeRoutesMixin:
                 "patient": patient_uuid,
                 "visit": visit_uuid,
                 "encounterType": encounter_type,
-                "encounterDatetime": _utc_now_iso(),
+                "encounterDatetime": encounter_datetime_override or _utc_now_iso(),
                 "obs": obs_list,
             }
             # Scribed SOAP notes should appear as submissions of the published

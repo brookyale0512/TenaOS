@@ -92,11 +92,14 @@ def _basic_auth_from_env() -> str | None:
 
     When the request comes from the browser via the TenaAgent-side proxy, no user
     Authorization or session cookie reaches us. The TenaAgent container must then
-    authenticate with the operator-supplied OPENMRS_USERNAME/PASSWORD so
-    encounter-type listing and form publishing still work.
+    authenticate with operator-supplied service credentials so encounter-type
+    listing, concept seeding, and form publishing still work. Prefer the
+    legacy OPENMRS_USERNAME/PASSWORD pair when present, but support the
+    canonical OPENMRS_SERVICE_USER/PASSWORD pair used by the all-in-one demo
+    container.
     """
-    username = os.getenv("OPENMRS_USERNAME")
-    password = os.getenv("OPENMRS_PASSWORD")
+    username = os.getenv("OPENMRS_USERNAME") or os.getenv("OPENMRS_SERVICE_USER")
+    password = os.getenv("OPENMRS_PASSWORD") or os.getenv("OPENMRS_SERVICE_PASSWORD")
     if not username or not password:
         return None
     token = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")

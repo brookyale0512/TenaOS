@@ -24,7 +24,14 @@ from typing import Any, Callable
 from .agent_prompts import material_system
 from .insight_traces import InsightTraceStore, attach_store
 from .models import InsightTrace
-from .tool_loop import KbGuidelinesClient, SEARCH_ONLY_SCHEMAS, _FORMAT_MAX_TOKENS, _normalise_query
+from .tool_loop import (
+    KbGuidelinesClient,
+    SEARCH_ONLY_SCHEMAS,
+    _FORMAT_MAX_TOKENS,
+    _extract_text_tool_calls,
+    _normalise_query,
+    _strip_tool_call_blocks,
+)
 
 log = logging.getLogger("tenaos.tena_agent.material_loop")
 
@@ -277,10 +284,19 @@ class PatientMaterialLoop:
                 if resp:
                     assistant_msg = resp.get("choices", [{}])[0].get("message", {})
                     tool_calls = assistant_msg.get("tool_calls") or []
-                    if tool_calls:
-                        tc = tool_calls[0]
-                        func = tc.get("function") or {}
-                        raw_args = func.get("arguments") or tc.get("arguments", "{}")
+                    if not tool_calls:
+                        tool_calls = _extract_text_tool_calls(assistant_msg.get("content") or "")
+                    fmt_call = next(
+                        (
+                            tc
+                            for tc in tool_calls
+                            if ((tc.get("function") or {}).get("name") or tc.get("name")) == "format_patient_material"
+                        ),
+                        tool_calls[0] if tool_calls else None,
+                    )
+                    if fmt_call:
+                        func = fmt_call.get("function") or {}
+                        raw_args = func.get("arguments") or fmt_call.get("arguments", "{}")
                         try:
                             args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
                         except json.JSONDecodeError:
@@ -317,8 +333,9 @@ class PatientMaterialLoop:
 
             # Capture any reasoning text (most common on turn 0 / Phase A)
             reasoning = (assistant_msg.get("content") or "").strip()
-            if reasoning:
-                trace.add("model_reasoning", f"Gemma reasoning (step {turn + 1})", reasoning[:1500], {"turn": turn + 1})
+            display_reasoning = _strip_tool_call_blocks(reasoning)
+            if display_reasoning:
+                trace.add("model_reasoning", f"Gemma reasoning (step {turn + 1})", display_reasoning[:1500], {"turn": turn + 1})
                 # Safety: if the model wrote the full material as plain text, extract it
                 if "## What You Have" in reasoning and "## When To Seek Help" in reasoning:
                     trace.add("model_summary", "Extracted material from reasoning", "Model wrote material as plain text — extracting.")
@@ -326,6 +343,13 @@ class PatientMaterialLoop:
 
             # Append full assistant message — all call IDs need tool results below.
             tool_calls = assistant_msg.get("tool_calls") or []
+            if not tool_calls:
+                # Gemma often emits <tena_call>{...}</tena_call> text instead of
+                # native tool_calls; parse it so KB searches actually run.
+                text_calls = _extract_text_tool_calls(assistant_msg.get("content") or "")
+                if text_calls:
+                    tool_calls = text_calls
+                    assistant_msg = {"role": "assistant", "content": "", "tool_calls": text_calls}
             messages.append({"role": "assistant", **assistant_msg})
 
             if not tool_calls:

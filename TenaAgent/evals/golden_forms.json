@@ -1,0 +1,33 @@
+{
+  "description": "Golden NL form requests for form-quality evaluation. Each spec lists clusters of acceptable CIEL concept ids (requireAnyOf) plus structural expectations. Concept ids are CIEL numeric ids.",
+  "specs": [
+    {
+      "id": "anc_vitals",
+      "request": "Build an antenatal care vitals form capturing weight, height, and blood pressure.",
+      "encounterType": "Consultation",
+      "minQuestions": 3,
+      "maxQuestions": 12,
+      "forbiddenClasses": ["Drug"],
+      "requireAnyOf": [
+        {"label": "Weight", "conceptIds": ["5089"]},
+        {"label": "Height", "conceptIds": ["5090"]},
+        {"label": "Systolic blood pressure", "conceptIds": ["5085"]},
+        {"label": "Diastolic blood pressure", "conceptIds": ["5086"]}
+      ]
+    },
+    {
+      "id": "tb_symptom_screen",
+      "request": "Create a tuberculosis symptom screening form asking about cough, fever, night sweats and weight loss.",
+      "encounterType": "Consultation",
+      "minQuestions": 3,
+      "maxQuestions": 12,
+      "forbiddenClasses": ["Drug"],
+      "requireAnyOf": [
+        {"label": "Cough", "conceptIds": ["143264", "159799"]},
+        {"label": "Fever", "conceptIds": ["140238", "1494"]},
+        {"label": "Night sweats", "conceptIds": ["133027"]},
+        {"label": "Weight loss", "conceptIds": ["832"]}
+      ]
+    }
+  ]
+}
