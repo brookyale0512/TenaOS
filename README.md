@@ -76,12 +76,6 @@ vitals, and clinical notes so users can immediately exercise patient
 search, charts, queues, reports, notes, vitals, and AI workflows. The
 records are generated locally and contain no real patient data.
 
-> Patient name search can take up to a minute to return results right
-> after first boot while OpenMRS finishes indexing the freshly seeded
-> records. If a search comes back empty immediately after setup
-> reports success, wait briefly and retry before assuming seeding
-> failed.
-
 ## Artifacts On Hugging Face
 
 The repository stays small. Large runtime artifacts are downloaded from
