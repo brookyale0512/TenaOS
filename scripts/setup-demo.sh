@@ -25,6 +25,38 @@ IMAGE_NAME="${TENAOS_IMAGE_NAME:-tenaos}"
 log() { printf '[setup-demo] %s\n' "$*"; }
 die() { printf '[setup-demo] ERROR: %s\n' "$*" >&2; exit 1; }
 
+# ── Progress UX for the two long, otherwise-silent wait loops ────────────
+# Interactive terminals get a single self-overwriting spinner line so it's
+# visually obvious the script is still alive; non-interactive runs (log
+# files, CI) keep the original periodic plain-text lines instead, since a
+# carriage-return spinner would just corrupt a saved log.
+is_tty() { [ -t 1 ]; }
+
+SPIN_FRAMES='|/-\'
+
+progress_tick() {
+  # progress_tick <spin-index> <label> <elapsed-seconds>
+  is_tty || return 0
+  local idx="$1" label="$2" elapsed="$3"
+  printf '\r[setup-demo] %s %s... (%ds elapsed)   ' \
+    "${SPIN_FRAMES:$((idx % ${#SPIN_FRAMES})):1}" "$label" "$elapsed"
+}
+
+progress_done() {
+  # progress_done <label> <elapsed-seconds>
+  local label="$1" elapsed="$2"
+  if is_tty; then
+    printf '\r[setup-demo] [OK] %s (%ds)                                        \n' "$label" "$elapsed"
+  else
+    log "$label after ${elapsed}s."
+  fi
+}
+
+progress_clear() {
+  is_tty || return 0
+  printf '\r%80s\r' ' '
+}
+
 usage() {
   cat <<'EOF'
 Usage: bash scripts/setup-demo.sh [options]
@@ -159,31 +191,36 @@ wait_for_container_healthy() {
   local timeout_seconds="${TENAOS_SETUP_HEALTH_TIMEOUT_SECONDS:-1200}"
   local interval_seconds=10
   local elapsed=0
-  log "Waiting for Docker healthcheck on $CONTAINER_NAME ..."
+  local spin_i=0
+  log "[4/5] Waiting for Docker healthcheck on $CONTAINER_NAME (OpenMRS first boot can take several minutes) ..."
   while [ "$elapsed" -le "$timeout_seconds" ]; do
     local status
     status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME" 2>/dev/null || true)"
     case "$status" in
       healthy)
-        log "TenaOS is healthy after ${elapsed}s."
+        progress_done "Container is healthy" "$elapsed"
         return 0
         ;;
       unhealthy)
+        progress_clear
         docker logs --tail 80 "$CONTAINER_NAME" >&2 || true
         die "$CONTAINER_NAME became unhealthy. Review the logs above."
         ;;
       "")
-        log "Waiting for $CONTAINER_NAME to be created ..."
+        progress_tick "$spin_i" "Waiting for $CONTAINER_NAME to be created" "$elapsed"
         ;;
       *)
-        if [ $((elapsed % 30)) -eq 0 ]; then
-          log "Still starting ($status, elapsed ${elapsed}s). OpenMRS first boot can take several minutes."
+        progress_tick "$spin_i" "Starting ($status)" "$elapsed"
+        if ! is_tty && [ $((elapsed % 30)) -eq 0 ]; then
+          log "Still starting ($status, elapsed ${elapsed}s)."
         fi
         ;;
     esac
+    spin_i=$((spin_i + 1))
     sleep "$interval_seconds"
     elapsed=$((elapsed + interval_seconds))
   done
+  progress_clear
   docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
   die "$CONTAINER_NAME did not become healthy within ${timeout_seconds}s."
 }
@@ -192,25 +229,34 @@ wait_for_openmrs_auth_ready() {
   local timeout_seconds="${TENAOS_SETUP_OPENMRS_TIMEOUT_SECONDS:-300}"
   local interval_seconds=5
   local elapsed=0
+  local spin_i=0
   local url="http://127.0.0.1:${HOST_PORT}/openmrs/ws/rest/v1/session"
-  log "Verifying OpenMRS login readiness through http://localhost:${HOST_PORT} ..."
+  log "[5/5] Verifying OpenMRS login readiness through http://localhost:${HOST_PORT} ..."
   while [ "$elapsed" -le "$timeout_seconds" ]; do
-    if curl -fsS -u "admin:${ADMIN_PASSWORD}" --connect-timeout 3 --max-time 10 "$url" \
+    # curl's own -S error text (e.g. "Operation timed out") is expected and
+    # noisy while OpenMRS is still coming up; only the parsed JSON result
+    # matters here, so curl's stderr is discarded rather than left to leak
+    # a "successful failure" onto the user's terminal on every poll.
+    if curl -fsS -u "admin:${ADMIN_PASSWORD}" --connect-timeout 3 --max-time 10 "$url" 2>/dev/null \
       | python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get("authenticated") is True else 1)' \
       >/dev/null 2>&1; then
-      log "OpenMRS REST authentication is ready after ${elapsed}s."
+      progress_done "OpenMRS REST authentication ready" "$elapsed"
       return 0
     fi
-    if [ $((elapsed % 30)) -eq 0 ]; then
+    progress_tick "$spin_i" "Waiting for OpenMRS to finish booting" "$elapsed"
+    if ! is_tty && [ $((elapsed % 30)) -eq 0 ]; then
       log "OpenMRS REST is still warming up (elapsed ${elapsed}s)."
     fi
+    spin_i=$((spin_i + 1))
     sleep "$interval_seconds"
     elapsed=$((elapsed + interval_seconds))
   done
+  progress_clear
   docker logs --tail 120 "$CONTAINER_NAME" >&2 || true
   die "OpenMRS REST authentication did not become ready within ${timeout_seconds}s."
 }
 
+log "[1/5] Checking Docker, GPU, and port availability ..."
 require_command docker
 require_command python3
 require_command curl
@@ -220,12 +266,14 @@ check_port_available "$HOST_PORT"
 
 validate_password OPENMRS_ADMIN_PASSWORD "$ADMIN_PASSWORD"
 validate_password OPENMRS_DB_PASSWORD "$DB_PASSWORD"
+log "[1/5] Prerequisites OK."
 
 if [ "$RUN_FETCH" -eq 1 ]; then
-  log "Fetching artifacts into $TARGET_DIR ..."
+  log "[2/5] Fetching model and knowledge-base artifacts into $TARGET_DIR ..."
   bash scripts/fetch-models.sh "$TARGET_DIR"
+  log "[2/5] Artifacts ready."
 else
-  log "Skipping artifact fetch; validating existing artifacts in $TARGET_DIR ..."
+  log "[2/5] Skipping artifact fetch; validating existing artifacts in $TARGET_DIR ..."
 fi
 
 MODELS_DIR="$TARGET_DIR/models"
@@ -267,8 +315,10 @@ log "OpenMRS username: admin"
 log "OpenMRS password: $ADMIN_PASSWORD"
 
 if [ "$RUN_UP" -eq 1 ]; then
-  log "Starting TenaOS with ${compose_cmd[*]} up -d ..."
+  log "[3/5] Building the TenaOS image and starting containers with ${compose_cmd[*]} up -d"
+  log "[3/5] (first build compiles llama.cpp from source and can take a while; later runs reuse Docker's layer cache) ..."
   "${compose_cmd[@]}" --env-file "$ENV_FILE" up -d
+  log "[3/5] Containers started."
   wait_for_container_healthy
   wait_for_openmrs_auth_ready
   log "Setup complete."
