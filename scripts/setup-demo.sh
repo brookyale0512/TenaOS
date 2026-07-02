@@ -20,6 +20,7 @@ ASSUME_YES=0
 ADMIN_PASSWORD="${OPENMRS_ADMIN_PASSWORD:-Admin123}"
 DB_PASSWORD="${OPENMRS_DB_PASSWORD:-Admin123}"
 CONTAINER_NAME="${TENAOS_CONTAINER_NAME:-TenaOS_v1}"
+IMAGE_NAME="${TENAOS_IMAGE_NAME:-tenaos}"
 
 log() { printf '[setup-demo] %s\n' "$*"; }
 die() { printf '[setup-demo] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -40,8 +41,13 @@ Options:
   -h, --help                Show this help
 
 Environment overrides are also honored: TENAOS_BOOTSTRAP_DIR,
-TENAOS_HOST_PORT, TENAOS_CONTAINER_NAME, OPENMRS_ADMIN_PASSWORD,
-OPENMRS_DB_PASSWORD.
+TENAOS_HOST_PORT, TENAOS_CONTAINER_NAME, TENAOS_IMAGE_NAME,
+OPENMRS_ADMIN_PASSWORD, OPENMRS_DB_PASSWORD.
+
+Running a second instance alongside an existing one on the same host?
+Set TENAOS_CONTAINER_NAME, TENAOS_IMAGE_NAME, and COMPOSE_PROJECT_NAME to
+distinct values and --port to a free port. See "Running Multiple
+Instances" in README.md.
 EOF
 }
 
@@ -139,13 +145,14 @@ PY
 }
 
 validate_artifacts() {
-  local models_dir="$1" embed_dir="$2" ciel_file="$3" snapshots_dir="$4"
+  local models_dir="$1" embed_dir="$2" ciel_file="$3" snapshots_dir="$4" sapbert_dir="$5"
   [ -f "$models_dir/gemma-4-E4B-it-BF16.gguf" ] || die "missing Gemma GGUF at $models_dir/gemma-4-E4B-it-BF16.gguf"
   [ -f "$models_dir/mmproj-gemma-4-E4B-it-bf16.gguf" ] || die "missing mmproj GGUF at $models_dir/mmproj-gemma-4-E4B-it-bf16.gguf"
   [ -f "$embed_dir/config.json" ] || die "missing EmbedGemma config at $embed_dir/config.json"
   [ -f "$ciel_file" ] || die "missing CIEL SQLite at $ciel_file"
   [ -f "$snapshots_dir/who_msf_guidelines.snapshot" ] || die "missing WHO/MSF Qdrant snapshot"
   [ -f "$snapshots_dir/ciel_concepts.snapshot" ] || die "missing CIEL Qdrant snapshot"
+  [ -f "$sapbert_dir/config.json" ] || die "missing SapBERT config at $sapbert_dir/config.json"
 }
 
 wait_for_container_healthy() {
@@ -225,7 +232,8 @@ MODELS_DIR="$TARGET_DIR/models"
 EMBED_DIR="$TARGET_DIR/embedgemma-300m"
 CIEL_FILE="$TARGET_DIR/ciel/ciel_search.sqlite3"
 SNAPSHOTS_DIR="$TARGET_DIR/qdrant-snapshots"
-validate_artifacts "$MODELS_DIR" "$EMBED_DIR" "$CIEL_FILE" "$SNAPSHOTS_DIR"
+SAPBERT_DIR="$TARGET_DIR/sapbert"
+validate_artifacts "$MODELS_DIR" "$EMBED_DIR" "$CIEL_FILE" "$SNAPSHOTS_DIR" "$SAPBERT_DIR"
 
 if [ -f "$ENV_FILE" ] && [ "$ASSUME_YES" -ne 1 ]; then
   die "$ENV_FILE already exists. Re-run with --yes to update it, or choose --env-file."
@@ -237,6 +245,8 @@ fi
 write_env_value "$ENV_FILE" TENAOS_PUBLIC_HOST "localhost"
 write_env_value "$ENV_FILE" TENAOS_HOST_PORT "$HOST_PORT"
 write_env_value "$ENV_FILE" TENAOS_CONTAINER_NAME "$CONTAINER_NAME"
+write_env_value "$ENV_FILE" TENAOS_IMAGE_NAME "$IMAGE_NAME"
+write_env_value "$ENV_FILE" TENAOS_PROFILE "demo"
 write_env_value "$ENV_FILE" OPENMRS_DB_PASSWORD "$DB_PASSWORD"
 write_env_value "$ENV_FILE" OPENMRS_ADMIN_PASSWORD "$ADMIN_PASSWORD"
 write_env_value "$ENV_FILE" OPENMRS_HEALTHCHECK_USERNAME "admin"
@@ -250,6 +260,7 @@ write_env_value "$ENV_FILE" TENAOS_MODELS_PATH "$MODELS_DIR"
 write_env_value "$ENV_FILE" TENAOS_EMBED_MODEL_PATH "$EMBED_DIR"
 write_env_value "$ENV_FILE" TENAOS_CIEL_SQLITE_PATH "$CIEL_FILE"
 write_env_value "$ENV_FILE" TENAOS_QDRANT_SNAPSHOTS_PATH "$SNAPSHOTS_DIR"
+write_env_value "$ENV_FILE" TENAOS_SAPBERT_PATH "$SAPBERT_DIR"
 
 log "Wrote $ENV_FILE."
 log "OpenMRS username: admin"

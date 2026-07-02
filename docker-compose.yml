@@ -17,11 +17,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tenaos:latest
+    image: ${TENAOS_IMAGE_NAME:-tenaos}:latest
     container_name: ${TENAOS_CONTAINER_NAME:-TenaOS_v1}
     restart: unless-stopped
     environment:
       TENAOS_PUBLIC_HOST: ${TENAOS_PUBLIC_HOST:-localhost}
+      TENAOS_PROFILE: ${TENAOS_PROFILE:-demo}
       OPENMRS_DB_PASSWORD: ${OPENMRS_DB_PASSWORD:?set OPENMRS_DB_PASSWORD in .env}
       OPENMRS_ADMIN_PASSWORD: ${OPENMRS_ADMIN_PASSWORD:?set OPENMRS_ADMIN_PASSWORD in .env}
       OPENMRS_JAVA_MEMORY_OPTS: ${OPENMRS_JAVA_MEMORY_OPTS:--Xmx4g}
@@ -29,7 +30,7 @@ services:
       OPENMRS_HEALTHCHECK_PASSWORD: ${OPENMRS_HEALTHCHECK_PASSWORD:-${OPENMRS_ADMIN_PASSWORD}}
       OPENMRS_SERVICE_USER: ${OPENMRS_SERVICE_USER:-admin}
       OPENMRS_SERVICE_PASSWORD: ${OPENMRS_SERVICE_PASSWORD:-${OPENMRS_ADMIN_PASSWORD}}
-      TENAOS_SEED_DEMO_PATIENTS: ${TENAOS_SEED_DEMO_PATIENTS:-true}
+      TENAOS_SEED_DEMO_PATIENTS: ${TENAOS_SEED_DEMO_PATIENTS:-}
       TENAOS_DEMO_PATIENT_COUNT: ${TENAOS_DEMO_PATIENT_COUNT:-50}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
@@ -40,6 +41,9 @@ services:
       - ${TENAOS_MODELS_PATH:-./models}:/models:ro
       - ${TENAOS_EMBED_MODEL_PATH:?set TENAOS_EMBED_MODEL_PATH to your embedgemma-300m dir}:/opt/tenaos/embedgemma-300m:ro
       - ${TENAOS_CIEL_SQLITE_PATH:?set TENAOS_CIEL_SQLITE_PATH to your ciel_search.sqlite3}:/opt/tenaos/ciel/ciel_search.sqlite3:ro
+      # SapBERT encoder for the kb-ciel semantic concept search (same model the
+      # ciel_concepts collection was indexed with).
+      - ${TENAOS_SAPBERT_PATH:-./tenaos-bootstrap/sapbert}:/opt/tenaos/sapbert:ro
       # Qdrant snapshots — restored automatically on first boot by the
       # supervised `qdrant-restore` program. Qdrant creates a tmp directory
       # under snapshots_path at startup, so this mount must be writable.

@@ -14,4 +14,6 @@ for i in $(seq 1 120); do
 done
 
 cd /opt/tenaos/TenaAgent/service
+export RAINDROP_LOCAL_DEBUGGER="${RAINDROP_LOCAL_DEBUGGER:-http://host.docker.internal:8086/v1/}"
+export FORM_AGENT_SUBJECT_ASSESSMENT="${FORM_AGENT_SUBJECT_ASSESSMENT:-1}"
 exec python3 main.py

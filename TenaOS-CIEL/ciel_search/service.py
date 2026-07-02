@@ -247,7 +247,15 @@ class CielSearchService:
         if hit.datatype in {"Coded", "Numeric", "Text", "Boolean", "Date", "Datetime"}:
             priority += 2
         if hit.concept_class == "Diagnosis":
-            priority -= 5
+            # CIEL classifies many plain-language symptoms (e.g. Otalgia,
+            # Tinnitus, Amenorrhea) as Diagnosis-class with an N/A or Boolean
+            # datatype. These render as valid Yes/No presence questions, so they
+            # should NOT be penalized; only Diagnosis concepts with a datatype
+            # that cannot collect an observation are demoted.
+            if hit.datatype in {"N/A", "Boolean", "", None}:
+                priority += 1
+            else:
+                priority -= 5
         if hit.concept_class == "Drug":
             priority -= 4
         if hit.concept_class == "Procedure":

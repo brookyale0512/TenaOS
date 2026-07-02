@@ -17,7 +17,7 @@ Phase 1 relies on OpenMRS Reference Application 3 plus any metadata staged in `m
 
 The first phase keeps the existing UUID references so we can quickly prove OpenMRS connectivity. Before production hardening, replace these with metadata discovery or config-driven values.
 
-- Vitals encounter type: `67a71486-1a54-468f-ac3e-7be3e1b0e6a0`
+- Vitals encounter type: `67a71486-1a54-468f-ac3e-7091a9a79584`
 - Clinical note encounter type: `d7151f82-c1f3-4152-a605-2f9ea7414a79`
 - Vitals concepts:
   - Temperature: `5088AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`

@@ -1,4 +1,8 @@
 qdrant-client>=1.10,<2
 sentence-transformers>=3.0,<5
-torch>=2.1
+# Pinned to the cu124 build installed in the Dockerfile (matches the A100 CUDA
+# 12.4 driver). `==2.6.0` matches the local `2.6.0+cu124` wheel, so this is
+# satisfied by the earlier GPU install and never re-resolved to a CPU/newer-CUDA
+# wheel. Keep in sync with the torch line in the Dockerfile.
+torch==2.6.0
 numpy>=1.26,<3

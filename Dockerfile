@@ -154,7 +154,15 @@ COPY --from=llama-build /src/llama.cpp/build/bin/lib*.so*     /opt/tenaos/llm/
 # ── Python application code + dependencies ───────────────────────────────
 COPY TenaAgent/service/requirements.txt /tmp/tena-agent-requirements.txt
 COPY TenaOS-KnowledgeBase/requirements.txt /tmp/kb-requirements.txt
+# Install PyTorch from the CUDA 12.4 wheel index FIRST so EmbedGemma (kb) and
+# SapBERT (kb-ciel) run on the GPU. The default PyPI torch wheel targets a CUDA
+# runtime newer than the deployment driver (e.g. cu130 vs. driver CUDA 12.4),
+# which makes torch.cuda.is_available() False and silently falls back to CPU.
+# cu124 matches A100 driver 550.x (CUDA 12.4). Installed before the requirements
+# so the `torch==2.6.0` pin there is already satisfied and not re-resolved.
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed --upgrade pip setuptools wheel && \
+    pip3 install --no-cache-dir --break-system-packages \
+        "torch==2.6.0" --index-url https://download.pytorch.org/whl/cu124 && \
     pip3 install --no-cache-dir --break-system-packages \
         -r /tmp/tena-agent-requirements.txt \
         -r /tmp/kb-requirements.txt \
@@ -204,7 +212,7 @@ RUN chmod +x /usr/local/bin/tenaos-entrypoint \
 RUN groupadd --system tenaos && \
     useradd --system --gid tenaos --create-home --home-dir /home/tenaos --shell /usr/sbin/nologin tenaos && \
     mkdir -p /run/mysqld /var/lib/mysql /var/log/supervisor /var/log/openmrs /var/log/tenaos \
-             /opt/tenaos/runtime /opt/tenaos/ciel /opt/tenaos/embedgemma-300m \
+             /opt/tenaos/runtime /opt/tenaos/ciel /opt/tenaos/embedgemma-300m /opt/tenaos/sapbert \
              /opt/tenaos/data /opt/tenaos/data/emr-os/openmrs-managed-config \
              /var/lib/lucene_index /target && \
     chown mysql:mysql /run/mysqld /var/lib/mysql && \
@@ -214,6 +222,7 @@ RUN groupadd --system tenaos && \
 
 # Environment defaults (overridable at `docker run` time).
 ENV LD_LIBRARY_PATH=/opt/tenaos/llm:/usr/local/cuda/lib64 \
+    TENAOS_PROFILE=demo \
     PYTHONPATH=/opt/tenaos/TenaAgent/service:/opt/tenaos/TenaOS-KnowledgeBase:/opt/tenaos/TenaOS-CIEL \
     TENA_AGENT_ROOT=/opt/tenaos/TenaAgent \
     TENA_AGENT_RUNTIME_DIR=/opt/tenaos/runtime \
@@ -222,14 +231,18 @@ ENV LD_LIBRARY_PATH=/opt/tenaos/llm:/usr/local/cuda/lib64 \
     TENAOS_LLM_API_KEY=EMPTY \
     TENAOS_KB_GUIDELINES_URL=http://127.0.0.1:4276 \
     TENAOS_KB_CIEL_URL=http://127.0.0.1:4277 \
+    FORM_AGENT_PIPELINE_V2=1 \
+    TENAOS_CIEL_SEMANTIC_SEARCH=1 \
     TENAOS_CIEL_ROOT=/opt/tenaos/TenaOS-CIEL \
     TENAOS_CIEL_SQLITE=/opt/tenaos/ciel/ciel_search.sqlite3 \
     EMBEDGEMMA_PATH=/opt/tenaos/embedgemma-300m \
+    TENAOS_SAPBERT_PATH=/opt/tenaos/sapbert \
     TENAOS_QDRANT_URL=http://127.0.0.1:6333 \
     # TenaAgent binds to loopback only. The in-container nginx (also on
     # localhost) is the single ingress; never expose :8095 to the host.
     TENA_AGENT_SERVICE_HOST=127.0.0.1 \
     TENA_AGENT_SERVICE_PORT=8095 \
+    TENA_AGENT_REQUIRE_OPENMRS_SESSION=true \
     OPENMRS_REST_BASE_URL=http://127.0.0.1:8080/openmrs/ws/rest/v1 \
     OPENMRS_FHIR_BASE_URL=http://127.0.0.1:8080/openmrs/ws/fhir2/R4 \
     OPENMRS_PORT=8080 \

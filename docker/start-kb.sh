@@ -40,5 +40,12 @@ export TENAOS_KB_HOST=127.0.0.1
 export TENAOS_KB_PORT="$PORT"
 export TENAOS_KB_COLLECTION="$COLLECTION"
 
+# Route the concept collection through the SapBERT CIEL retriever; everything
+# else uses the EmbedGemma guideline retriever.
+case "$NAME:$COLLECTION" in
+  ciel:*|*:ciel_concepts) export TENAOS_KB_MODE=ciel ;;
+  *) export TENAOS_KB_MODE=guidelines ;;
+esac
+
 cd /opt/tenaos/TenaOS-KnowledgeBase
 exec python3 -m kb_guidelines.daemon

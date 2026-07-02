@@ -341,7 +341,8 @@ def maybe_add_queue_entries(patient_uuids: list[str]) -> int:
 
 
 def main() -> int:
-    if os.getenv("TENAOS_SEED_DEMO_PATIENTS", "true").strip().lower() in {"0", "false", "no", "off"}:
+    default_seed = "false" if os.getenv("TENAOS_PROFILE", "demo").strip().lower() == "production" else "true"
+    if os.getenv("TENAOS_SEED_DEMO_PATIENTS", default_seed).strip().lower() in {"0", "false", "no", "off"}:
         log("TENAOS_SEED_DEMO_PATIENTS=false; skipping.")
         return 0
     if MARKER.exists():

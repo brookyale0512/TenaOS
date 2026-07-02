@@ -228,7 +228,11 @@ tenaos_seed_locations_once() {
 }
 
 tenaos_seed_demo_patients_once() {
-  case "${TENAOS_SEED_DEMO_PATIENTS:-true}" in
+  local seed_default="true"
+  if [ "${TENAOS_PROFILE:-demo}" = "production" ]; then
+    seed_default="false"
+  fi
+  case "${TENAOS_SEED_DEMO_PATIENTS:-$seed_default}" in
     0|false|False|FALSE|no|No|NO|off|Off|OFF)
       echo "[tenaos] Demo patient seeding disabled."
       return 0

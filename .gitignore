@@ -47,6 +47,7 @@ tenaos-bootstrap/
 qdrant-snapshots/
 *.snapshot
 embedgemma-300m/
+sapbert/
 
 # Personal documents
 resume_build/

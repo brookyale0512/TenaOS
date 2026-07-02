@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TENAOS_KB_HOST=0.0.0.0 \
+    TENAOS_KB_HOST=127.0.0.1 \
     TENAOS_KB_PORT=4276 \
     TENAOS_KB_COLLECTION=who_msf_guidelines \
     TENAOS_QDRANT_URL=http://tenaos-qdrant:6333

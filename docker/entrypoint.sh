@@ -8,6 +8,18 @@ log() { printf '[tenaos] %s\n' "$*"; }
 : "${OPENMRS_DB_PASSWORD:?OPENMRS_DB_PASSWORD must be set (use --env or docker compose)}"
 : "${OPENMRS_ADMIN_PASSWORD:?OPENMRS_ADMIN_PASSWORD must be set (use --env or docker compose)}"
 
+TENAOS_PROFILE="${TENAOS_PROFILE:-demo}"
+
+validate_profile() {
+  case "$TENAOS_PROFILE" in
+    demo|dev|production) ;;
+    *)
+      log "ERROR: TENAOS_PROFILE must be one of: demo, dev, production."
+      exit 1
+      ;;
+  esac
+}
+
 validate_openmrs_admin_password() {
   local password="$OPENMRS_ADMIN_PASSWORD"
   if [ "${#password}" -lt 8 ] ||
@@ -20,7 +32,25 @@ validate_openmrs_admin_password() {
   fi
 }
 
+validate_production_defaults() {
+  if [ "$TENAOS_PROFILE" != "production" ]; then
+    return 0
+  fi
+  if [ "$OPENMRS_ADMIN_PASSWORD" = "Admin123" ] || [ "$OPENMRS_DB_PASSWORD" = "Admin123" ]; then
+    log "ERROR: TENAOS_PROFILE=production cannot use the demo Admin123 password."
+    exit 1
+  fi
+  case "${TENAOS_SEED_DEMO_PATIENTS:-false}" in
+    1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+      log "ERROR: TENAOS_PROFILE=production cannot enable TENAOS_SEED_DEMO_PATIENTS."
+      exit 1
+      ;;
+  esac
+}
+
+validate_profile
 validate_openmrs_admin_password
+validate_production_defaults
 export OPENMRS_VERIFY_USERNAME="${OPENMRS_VERIFY_USERNAME:-${OPENMRS_HEALTHCHECK_USERNAME:-admin}}"
 export OPENMRS_VERIFY_PASSWORD="${OPENMRS_VERIFY_PASSWORD:-${OPENMRS_HEALTHCHECK_PASSWORD:-$OPENMRS_ADMIN_PASSWORD}}"
 export OPENMRS_SERVICE_USER="${OPENMRS_SERVICE_USER:-admin}"

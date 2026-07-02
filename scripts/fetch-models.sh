@@ -6,6 +6,7 @@
 #   * EmbedGemma 300M                  (~1.2 GB)
 #   * CIEL search SQLite               (~1.7 GB)
 #   * WHO/MSF + CIEL Qdrant snapshots  (~0.8 GB)
+#   * SapBERT (CIEL semantic encoder)  (~0.4 GB)
 #
 # Idempotent: any artifact that is already present on disk is skipped.
 #
@@ -26,6 +27,9 @@ GEMMA_REPO="${TENAOS_HF_GEMMA_REPO:-beza4588/TenaOS}"
 CIEL_REPO="${TENAOS_HF_CIEL_REPO:-beza4588/tenaos-ciel-search-sqlite}"
 QDRANT_REPO="${TENAOS_HF_QDRANT_REPO:-beza4588/tenaos-qdrant-snapshots}"
 EMBED_REPO="${TENAOS_HF_EMBED_REPO:-google/embeddinggemma-300m}"
+# SapBERT is the dense encoder the ciel_concepts collection was indexed with;
+# the kb-ciel daemon must query with the same model. Override to self-host.
+SAPBERT_REPO="${TENAOS_HF_SAPBERT_REPO:-cambridgeltl/SapBERT-from-PubMedBERT-fulltext}"
 
 log() { printf '[fetch-models] %s\n' "$*"; }
 die() { printf '[fetch-models] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -55,7 +59,8 @@ MODELS_DIR="$TARGET/models"
 EMBED_DIR="$TARGET/embedgemma-300m"
 CIEL_DIR="$TARGET/ciel"
 SNAPSHOTS_DIR="$TARGET/qdrant-snapshots"
-mkdir -p "$MODELS_DIR" "$EMBED_DIR" "$CIEL_DIR" "$SNAPSHOTS_DIR"
+SAPBERT_DIR="$TARGET/sapbert"
+mkdir -p "$MODELS_DIR" "$EMBED_DIR" "$CIEL_DIR" "$SNAPSHOTS_DIR" "$SAPBERT_DIR"
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 have_file() {
@@ -112,7 +117,7 @@ else
 fi
 
 # ── 4. Qdrant snapshots (WHO/MSF guidelines + CIEL concepts) ─────────────
-log "[4/4] Qdrant snapshots (~0.8 GB) from hf.co/$QDRANT_REPO"
+log "[4/5] Qdrant snapshots (~0.8 GB) from hf.co/$QDRANT_REPO"
 for f in who_msf_guidelines.snapshot ciel_concepts.snapshot; do
   if have_file "$SNAPSHOTS_DIR/$f" 10000000; then
     log "      $f already present, skipping"
@@ -123,6 +128,16 @@ for f in who_msf_guidelines.snapshot ciel_concepts.snapshot; do
   fi
 done
 
+# ── 5. SapBERT dense encoder (kb-ciel semantic query model) ──────────────
+log "[5/5] SapBERT encoder (~0.4 GB) from hf.co/$SAPBERT_REPO"
+if have_file "$SAPBERT_DIR/config.json" 100; then
+  log "      SapBERT already present, skipping"
+else
+  hf_download_dir "$SAPBERT_REPO" "$SAPBERT_DIR" "model"
+  have_file "$SAPBERT_DIR/config.json" 100 \
+    || die "SapBERT config.json missing after download"
+fi
+
 # ── Done ─────────────────────────────────────────────────────────────────
 log "All artifacts ready under: $TARGET"
 log ""
@@ -130,6 +145,7 @@ log "Set these in your .env (alongside the OPENMRS_*_PASSWORD lines):"
 log "  TENAOS_EMBED_MODEL_PATH=$EMBED_DIR"
 log "  TENAOS_CIEL_SQLITE_PATH=$CIEL_DIR/ciel_search.sqlite3"
 log "  TENAOS_QDRANT_SNAPSHOTS_PATH=$SNAPSHOTS_DIR"
+log "  TENAOS_SAPBERT_PATH=$SAPBERT_DIR"
 log ""
 log "  TENAOS_MODELS_PATH=$MODELS_DIR"
 log ""

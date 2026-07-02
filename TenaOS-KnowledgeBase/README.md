@@ -43,6 +43,11 @@ curl -fsS -X POST http://localhost:4276/search \
 
 ## Security boundary
 
+The KB HTTP daemon binds to `127.0.0.1` by default. Set
+`TENAOS_KB_HOST=0.0.0.0` only behind an authentication proxy or private
+container network. Set `TENAOS_KB_SHARED_SECRET` to require callers to
+send the same value in `X-TenaOS-KB-Secret`.
+
 Qdrant has no API key. Inside the single TenaOS image it binds to
 **`127.0.0.1` only** (see [`docker/start-llama.sh`](../docker/start-llama.sh)
 and the supervised `qdrant` process in
@@ -55,9 +60,11 @@ authentication proxy in front of it.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TENAOS_KB_HOST`        | `0.0.0.0`             | Listen interface |
+| `TENAOS_KB_HOST`        | `127.0.0.1`           | Listen interface |
 | `TENAOS_KB_PORT`        | `4276`                | Listen port |
 | `TENAOS_KB_COLLECTION`  | `who_msf_guidelines`  | Qdrant collection name |
+| `TENAOS_KB_MAX_BODY_BYTES` | `4194304`          | Maximum HTTP request body |
+| `TENAOS_KB_SHARED_SECRET` | _(unset)_           | Optional shared-secret header |
 | `TENAOS_QDRANT_URL`     | `http://tenaos-qdrant:6333` | Qdrant endpoint |
 | `EMBEDGEMMA_PATH`       | _(model cache)_       | Local EmbedGemma-300M snapshot |
 | `KB_BM25_CACHE`         | _(next to module)_    | JSON cache for sparse stats |
