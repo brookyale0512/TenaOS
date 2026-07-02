@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
-import { useForm, FormProvider } from "react-hook-form";
+import { useForm, FormProvider, useWatch } from "react-hook-form";
 import { ChevronLeft, ChevronRight, Send, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { FormSchema, FormValues, HiddenFields } from "@/types/forms";
+import { evaluateHideExpressions, omitHiddenValues } from "../utils/expressionEvaluator";
 import { FormQuestionRenderer } from "./FormQuestionRenderer";
 
 interface FormRendererProps {
@@ -21,12 +22,15 @@ export function FormRenderer({ schema, onSubmit, isSubmitting, defaultValues, re
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
-  const methods = useForm({ defaultValues: defaultValues ?? {} });
+  const methods = useForm({ defaultValues: defaultValues ?? {}, shouldUnregister: true });
   const { handleSubmit } = methods;
+  const watchedValues = useWatch({ control: methods.control }) as FormValues;
 
-  const hiddenFields = useMemo<HiddenFields>(() => ({}), []);
-
-  const pages = schema.pages ?? [];
+  const pages = useMemo(() => schema.pages ?? [], [schema.pages]);
+  const hiddenFields = useMemo<HiddenFields>(
+    () => evaluateHideExpressions(pages, watchedValues),
+    [pages, watchedValues],
+  );
   const currentPage = pages[currentPageIdx];
   const isLastPage = currentPageIdx === pages.length - 1;
   const isFirstPage = currentPageIdx === 0;
@@ -43,7 +47,7 @@ export function FormRenderer({ schema, onSubmit, isSubmitting, defaultValues, re
   };
 
   const handleFormSubmit = handleSubmit((values) => {
-    onSubmit(values as FormValues);
+    onSubmit(omitHiddenValues(values as FormValues, hiddenFields));
   });
 
   if (!currentPage) {
@@ -98,13 +102,15 @@ export function FormRenderer({ schema, onSubmit, isSubmitting, defaultValues, re
                     <Separator />
                     <div className="p-3 grid grid-cols-1 gap-3">
                       {section.questions.map((question) => (
-                        <div key={question.id} className="rounded-xl bg-emerald-100/60 p-4">
-                          <FormQuestionRenderer
-                            question={question}
-                            hiddenFields={hiddenFields}
-                            disabled={readOnly}
-                          />
-                        </div>
+                        hiddenFields[question.id] ? null : (
+                          <div key={question.id} className="rounded-xl bg-emerald-100/60 p-4">
+                            <FormQuestionRenderer
+                              question={question}
+                              hiddenFields={hiddenFields}
+                              disabled={readOnly}
+                            />
+                          </div>
+                        )
                       ))}
                     </div>
                   </>

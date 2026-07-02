@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { InlineMarkup } from "@/lib/render/InlineMarkup";
 import {
   useLabCatalog,
   useAddLabTest,
@@ -299,9 +300,7 @@ export function LabManagePage() {
                     : isError ? "border border-slate-200 bg-slate-50 text-slate-700"
                     : "border border-[var(--clinic-border)] bg-white text-[var(--clinic-ink)]"
                   }`}>
-                    <span dangerouslySetInnerHTML={{ __html: msg.text
-                      .replace(/\*\((.+?)\)\*/g, '<span class="text-[10px] text-[hsl(var(--muted-foreground))] block mb-1">$1</span>')
-                      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>") }} />
+                    <InlineMarkup text={msg.text} labNotes />
                   </div>
                 </div>
               );

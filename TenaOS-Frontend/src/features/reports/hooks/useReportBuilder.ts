@@ -1,6 +1,6 @@
 // React Query + SSE hooks for the report-builder agent.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tenaAgentClient } from "@/lib/api/client";
 import { describeError } from "@/lib/api/errors";
@@ -192,9 +192,13 @@ export function useReportDraftEvents(draftId: string | undefined): {
   const [previousDraftId, setPreviousDraftId] = useState<string | undefined>(draftId);
   const [events, setEvents] = useState<ReportDraftEvent[]>([]);
   const [status, setStatus] = useState<"idle" | "open" | "error">("idle");
+  const seenRef = useRef<Set<string>>(new Set());
+  const lastTimestampRef = useRef<string | null>(null);
 
   if (previousDraftId !== draftId) {
     setPreviousDraftId(draftId);
+    seenRef.current = new Set();
+    lastTimestampRef.current = null;
     setEvents([]);
     setStatus("idle");
   }
@@ -202,33 +206,35 @@ export function useReportDraftEvents(draftId: string | undefined): {
   useEffect(() => {
     if (!draftId) return undefined;
     let aborted = false;
-    const seen = new Set<string>();
-
     const baseUrl = (import.meta.env.VITE_TENA_AGENT_URL || "/agent-api").replace(/\/$/, "");
 
     const ingestEvent = (event: ReportDraftEvent) => {
-      if (seen.has(event.eventId)) return;
-      seen.add(event.eventId);
+      if (seenRef.current.has(event.eventId)) return;
+      seenRef.current.add(event.eventId);
+      lastTimestampRef.current = event.timestamp;
       setEvents((prev) =>
         prev.some((existing) => existing.eventId === event.eventId) ? prev : [...prev, event],
       );
     };
 
-    const loadInitial = async () => {
+    const loadInitial = async (): Promise<string | null> => {
       try {
         const { data } = await tenaAgentClient.get(`${REPORTS_API}/drafts/${draftId}/events`);
-        if (aborted) return;
+        if (aborted) return null;
         const list = (data.events ?? []) as ReportDraftEvent[];
         for (const event of list) ingestEvent(event);
+        return lastTimestampRef.current;
       } catch {
         if (!aborted) setStatus("error");
+        return null;
       }
     };
 
     let source: EventSource | null = null;
-    const openSource = async () => {
+    const openSource = async (since: string | null) => {
       try {
-        source = new EventSource(`${baseUrl}${REPORTS_API}/drafts/${draftId}/events`, { withCredentials: true });
+        const sinceQuery = since ? `?since=${encodeURIComponent(since)}` : "";
+        source = new EventSource(`${baseUrl}${REPORTS_API}/drafts/${draftId}/events${sinceQuery}`, { withCredentials: true });
         source.onopen = () => {
           if (!aborted) setStatus("open");
         };
@@ -251,8 +257,9 @@ export function useReportDraftEvents(draftId: string | undefined): {
       }
     };
 
-    openSource();
-    loadInitial();
+    loadInitial().then((since) => {
+      if (!aborted) openSource(since);
+    });
 
     return () => {
       aborted = true;

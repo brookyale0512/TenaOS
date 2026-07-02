@@ -55,7 +55,7 @@ export function ReportBuilderWorkspace() {
     <div className="flex h-full max-h-full min-h-0 w-full overflow-hidden">
       {!draftId ? (
         <div className="p-4 md:p-6 space-y-3">
-          {tenaAgentHealth.isError && (
+          {tenaAgentHealth.isError && !tenaAgentHealth.data && (
             <ErrorState
               title="TenaAgent service is offline"
               description="The report builder requires the TenaAgent service, Gemma 4, and CIEL to be reachable."
@@ -199,6 +199,7 @@ function ActiveDraft({ draftId }: { draftId: string }) {
             <ReportBuilderPreview
               validation={validation}
               result={resultQuery.data?.result ?? draft.data?.lastResult ?? null}
+              spec={draft.data?.spec ?? null}
               status={resultQuery.data?.status ?? draft.data?.status}
               lastRunAt={resultQuery.data?.lastRunAt ?? draft.data?.lastRunAt}
               isRunning={runReport.isPending || draft.data?.status === "running"}

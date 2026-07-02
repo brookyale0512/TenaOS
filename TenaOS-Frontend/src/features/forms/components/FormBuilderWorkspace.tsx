@@ -61,18 +61,23 @@ export function FormBuilderWorkspace() {
   const createDraft = useCreateDraft();
   const [draftId, setDraftId] = useState<string | null>(null);
 
-  const tenaAgentReady = tenaAgentHealth.data?.ok === true;
+  const tenaAgentReady = tenaAgentHealth.isSuccess && !!tenaAgentHealth.data;
   const cielReady = tenaAgentHealth.data?.ciel?.available === true;
   const gemmaReady = tenaAgentHealth.data?.llm?.healthy === true;
-  const tenaAgentStale = tenaAgentHealth.isSuccess && tenaAgentReady && !tenaAgentHealth.data?.ciel;
+  const tenaAgentStale = tenaAgentHealth.isSuccess && !tenaAgentHealth.data?.ciel;
+
+  // Only treat the agent as "offline" when we have never reached it. Once we
+  // have a healthy snapshot, transient probe errors (a busy GPU, a proxy blip)
+  // keep the last good data via placeholderData and must not flip to offline.
+  const offline = tenaAgentHealth.isError && !tenaAgentHealth.data;
 
   const health: WorkspaceHealth = {
     tenaAgentReady,
     cielReady,
     gemmaReady,
     tenaAgentStale,
-    isPending: tenaAgentHealth.isPending,
-    isError: tenaAgentHealth.isError,
+    isPending: tenaAgentHealth.isPending && !tenaAgentHealth.data,
+    isError: offline,
     refetch: () => tenaAgentHealth.refetch(),
   };
 

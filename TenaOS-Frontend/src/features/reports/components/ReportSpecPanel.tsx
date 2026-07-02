@@ -525,6 +525,7 @@ function FilterChip({
         <div className="font-medium text-[var(--clinic-ink)] truncate">{filter.label}</div>
         <div className="font-mono text-[hsl(var(--muted-foreground))]">
           CIEL {filter.conceptId} · {filter.filterMode}
+          {filter.conceptIds && filter.conceptIds.length > 1 ? ` · ${filter.conceptIds.length} concepts` : ""}
           {valueLabel ? ` · ${valueLabel}` : ""}
         </div>
       </div>

@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, BarChart3, ChevronDown, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ReportResultPanel } from "./ReportResultPanel";
-import type { ReportResult, ValidationReport } from "../types/reportBuilder";
+import type { ReportResult, ReportSpec, ValidationReport } from "../types/reportBuilder";
 
 interface ReportBuilderPreviewProps {
   validation: ValidationReport | null | undefined;
   result: ReportResult | null | undefined;
+  spec?: ReportSpec | null | undefined;
   status: string | null | undefined;
   lastRunAt: string | null | undefined;
   isRunning?: boolean;
@@ -15,6 +16,7 @@ interface ReportBuilderPreviewProps {
 export function ReportBuilderPreview({
   validation,
   result,
+  spec,
   status,
   lastRunAt,
   isRunning,
@@ -81,7 +83,7 @@ export function ReportBuilderPreview({
 
         {open && (
           <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto border-t border-[#b2e8e2] p-3">
-            <ReportResultPanel result={result} status={status} lastRunAt={lastRunAt} />
+            <ReportResultPanel result={result} spec={spec} status={status} lastRunAt={lastRunAt} />
           </div>
         )}
       </div>

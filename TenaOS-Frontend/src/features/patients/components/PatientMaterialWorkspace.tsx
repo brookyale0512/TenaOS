@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { tenaAgentClient } from "@/lib/api/client";
 import { describeError } from "@/lib/api/errors";
+import { InlineMarkup } from "@/lib/render/InlineMarkup";
 import { toast } from "@/stores/uiStore";
 import type { PatientMaterialTrace } from "../hooks/usePatientMaterial";
 
@@ -489,7 +490,7 @@ function MaterialBodyRenderer({ body, textClass }: { body: string; textClass: st
               <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-current/10 text-[10px] font-bold">
                 {item.num + i === item.num ? item.num : item.num + i}
               </span>
-              <span dangerouslySetInnerHTML={{ __html: renderInline(item.text) }} />
+              <span><InlineMarkup text={item.text} /></span>
             </li>
           ))}
         </ol>,
@@ -500,7 +501,7 @@ function MaterialBodyRenderer({ body, textClass }: { body: string; textClass: st
           {listItems.map((item, i) => (
             <li key={i} className={`flex gap-3 text-sm leading-relaxed ${textClass}`}>
               <span className="mt-[7px] size-2 shrink-0 rounded-full bg-current opacity-40" />
-              <span dangerouslySetInnerHTML={{ __html: renderInline(item.text) }} />
+              <span><InlineMarkup text={item.text} /></span>
             </li>
           ))}
         </ul>,
@@ -522,22 +523,14 @@ function MaterialBodyRenderer({ body, textClass }: { body: string; textClass: st
     } else {
       flushList();
       nodes.push(
-        <p
-          key={key++}
-          className={`mt-1.5 text-sm leading-relaxed ${textClass}`}
-          dangerouslySetInnerHTML={{ __html: renderInline(trimmed) }}
-        />,
+        <p key={key++} className={`mt-1.5 text-sm leading-relaxed ${textClass}`}>
+          <InlineMarkup text={trimmed} />
+        </p>,
       );
     }
   }
   flushList();
   return <div className="space-y-0.5">{nodes}</div>;
-}
-
-function renderInline(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+?)\*/g, "<em>$1</em>");
 }
 
 // ── Trace grouping ────────────────────────────────────────────────────────

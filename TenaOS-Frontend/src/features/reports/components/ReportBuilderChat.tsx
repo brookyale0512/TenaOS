@@ -25,6 +25,7 @@ const TRACE_OPS = new Set([
   "build_report_query",
   "build_report_query_failed",
   "build_report_query_invalid",
+  "report_repair_started",
   "run_report_started",
   "run_report_progress",
   "run_report_completed",
@@ -276,6 +277,7 @@ function traceTitle(event: ReportDraftEvent): string {
   if (event.operation === "model_tool_call") return `Gemma tool call: ${tool ?? "?"}`;
   if (event.operation === "tool_result") return `Tool result: ${tool ?? "?"}`;
   if (event.operation === "run_report_progress") return `Run progress: ${payload?.stage ?? "?"}`;
+  if (event.operation === "report_repair_started") return "Report repair";
   if (event.operation === "search_ciel_seeds_repeated") return "Repeat search rejected";
   if (event.operation === "agent_reasoning") return `Gemma reasoning${payload?.phase ? ` (${payload.phase})` : ""}`;
   return event.operation;

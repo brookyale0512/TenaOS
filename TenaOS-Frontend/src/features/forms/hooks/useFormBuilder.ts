@@ -5,7 +5,7 @@
 // hooks use the existing `tenaAgentClient` axios instance so credentials and the
 // optional Bearer token are forwarded consistently.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tenaAgentClient } from "@/lib/api/client";
 import { describeError } from "@/lib/api/errors";
@@ -24,7 +24,7 @@ const FORMS_API = "/forms";
 
 // ---------------------------------------------------------------------------
 // TenaAgent service health probe (used by the workspace header so the user knows
-// whether CIEL + vLLM are reachable).
+// whether CIEL + TenaOS-LLM are reachable).
 
 export interface TenaAgentHealthInfo {
   ok: boolean;
@@ -37,11 +37,25 @@ export function useTenaAgentHealth() {
   return useQuery({
     queryKey: ["tena-agent", "health"],
     queryFn: async (): Promise<TenaAgentHealthInfo> => {
-      const { data } = await tenaAgentClient.get("/health");
+      const { data, status } = await tenaAgentClient.get("/health", {
+        validateStatus: (s) => s < 500 || s === 503,
+      });
+      // A 503 (a dependency still warming, or a proxy hiccup) or any non-health
+      // body (e.g. an HTML error page) is a transient state, not a hard outage.
+      // Throw so React Query retries and keeps the last good snapshot, instead
+      // of rendering a misleading "offline" banner while a build is in flight.
+      if (status === 503 || typeof data !== "object" || data === null || !("llm" in data)) {
+        throw new Error("tena-agent health temporarily unavailable");
+      }
       return data as TenaAgentHealthInfo;
     },
     refetchInterval: 30 * 1000,
     staleTime: 15 * 1000,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    // Keep showing the last healthy snapshot across transient errors so the
+    // workspace doesn't flap between "ready" and "offline".
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -242,9 +256,13 @@ export function useDraftEvents(draftId: string | undefined): {
   const [previousDraftId, setPreviousDraftId] = useState<string | undefined>(draftId);
   const [events, setEvents] = useState<FormDraftEvent[]>([]);
   const [status, setStatus] = useState<"idle" | "open" | "error">("idle");
+  const seenRef = useRef<Set<string>>(new Set());
+  const lastTimestampRef = useRef<string | null>(null);
 
   if (previousDraftId !== draftId) {
     setPreviousDraftId(draftId);
+    seenRef.current = new Set();
+    lastTimestampRef.current = null;
     setEvents([]);
     setStatus("idle");
   }
@@ -252,31 +270,45 @@ export function useDraftEvents(draftId: string | undefined): {
   useEffect(() => {
     if (!draftId) return undefined;
     let aborted = false;
-    const seen = new Set<string>();
 
     const baseUrl = (import.meta.env.VITE_TENA_AGENT_URL || "/agent-api").replace(/\/$/, "");
 
     const ingestEvent = (event: FormDraftEvent) => {
-      if (seen.has(event.eventId)) return;
-      seen.add(event.eventId);
-      setEvents((prev) => (prev.some((existing) => existing.eventId === event.eventId) ? prev : [...prev, event]));
+      if (seenRef.current.has(event.eventId)) return;
+      seenRef.current.add(event.eventId);
+      lastTimestampRef.current = event.timestamp;
+      setEvents((prev) => [...prev, event]);
     };
 
-    const loadInitial = async () => {
+    const ingestEvents = (nextEvents: FormDraftEvent[]) => {
+      const fresh: FormDraftEvent[] = [];
+      for (const event of nextEvents) {
+        if (seenRef.current.has(event.eventId)) continue;
+        seenRef.current.add(event.eventId);
+        lastTimestampRef.current = event.timestamp;
+        fresh.push(event);
+      }
+      if (fresh.length > 0) setEvents((prev) => [...prev, ...fresh]);
+    };
+
+    const loadInitial = async (): Promise<string | null> => {
       try {
         const { data } = await tenaAgentClient.get(`${FORMS_API}/drafts/${draftId}/events`);
-        if (aborted) return;
+        if (aborted) return null;
         const list = (data.events ?? []) as FormDraftEvent[];
-        for (const event of list) ingestEvent(event);
+        ingestEvents(list);
+        return lastTimestampRef.current;
       } catch {
         if (!aborted) setStatus("error");
+        return null;
       }
     };
 
     let source: EventSource | null = null;
-    const openSource = async () => {
+    const openSource = async (since: string | null) => {
       try {
-        source = new EventSource(`${baseUrl}${FORMS_API}/drafts/${draftId}/events`, { withCredentials: true });
+        const sinceQuery = since ? `?since=${encodeURIComponent(since)}` : "";
+        source = new EventSource(`${baseUrl}${FORMS_API}/drafts/${draftId}/events${sinceQuery}`, { withCredentials: true });
         source.onopen = () => {
           if (!aborted) setStatus("open");
         };
@@ -299,8 +331,9 @@ export function useDraftEvents(draftId: string | undefined): {
       }
     };
 
-    openSource();
-    loadInitial();
+    loadInitial().then((since) => {
+      if (!aborted) openSource(since);
+    });
 
     return () => {
       aborted = true;

@@ -15,7 +15,7 @@ export function TextMessage({ event }: TextMessageProps) {
   if (event.operation === "user_message" || event.actor === "user") {
     return (
       <div className="flex justify-end">
-        <div className="rounded-2xl bg-[var(--clinic-blue)] text-white px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap break-words">
+        <div className="rounded-2xl bg-[hsl(var(--primary))] text-white px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap break-words">
           {event.detail}
         </div>
       </div>

@@ -19,6 +19,7 @@ import {
 import { Workspace } from "@/components/workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InlineMarkup } from "@/lib/render/InlineMarkup";
 import type { KbHit, PatientInsightTrace, StructuredCds } from "../hooks/usePatientAiInsight";
 import { useTranslateCds } from "../hooks/useTranslateCds";
 
@@ -341,7 +342,7 @@ function renderMdBody(body: string, textClass: string): React.ReactNode {
               <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-white/60 text-[10px] font-bold opacity-70">
                 {listStart + i}
               </span>
-              <span dangerouslySetInnerHTML={{ __html: renderInlineMd(item) }} />
+              <span><InlineMarkup text={item} clinicalCitations /></span>
             </li>
           ))}
         </ol>,
@@ -352,7 +353,7 @@ function renderMdBody(body: string, textClass: string): React.ReactNode {
           {listItems.map((item, i) => (
             <li key={i} className={`flex gap-2.5 text-sm leading-relaxed ${textClass}`}>
               <span className="mt-2 size-1.5 shrink-0 rounded-full bg-current opacity-50" />
-              <span dangerouslySetInnerHTML={{ __html: renderInlineMd(item) }} />
+              <span><InlineMarkup text={item} clinicalCitations /></span>
             </li>
           ))}
         </ul>,
@@ -379,43 +380,14 @@ function renderMdBody(body: string, textClass: string): React.ReactNode {
     } else {
       flushList();
       nodes.push(
-        <p
-          key={key++}
-          className={`mt-1.5 text-sm leading-relaxed ${textClass}`}
-          dangerouslySetInnerHTML={{ __html: renderInlineMd(trimmed) }}
-        />,
+        <p key={key++} className={`mt-1.5 text-sm leading-relaxed ${textClass}`}>
+          <InlineMarkup text={trimmed} clinicalCitations />
+        </p>,
       );
     }
   }
   flushList();
   return <>{nodes}</>;
-}
-
-function renderInlineMd(text: string): string {
-  return text
-    // Compact citation tags: *(WHO: ...) or *(MSF: ...) — render as a source pill
-    .replace(
-      /\*\((WHO|MSF):\s*([^)]+)\)\*/g,
-      '<span class="ml-1 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-blue-700">$1: $2</span>',
-    )
-    // Also handle trailing *(WHO Guidelines)* or *(MSF Clinical Guidelines)* without colon
-    .replace(
-      /\*\((WHO|MSF)[^)]*\)\*/g,
-      '<span class="ml-1 inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-blue-700">$1</span>',
-    )
-    // Longer-form citations: "(According to WHO Guidelines (KB evidence): ...)" → pill
-    .replace(
-      /\(According to ([^(]+?)\s*\(KB evidence\):\s*([^)]{0,80}[^)]*)\)/g,
-      '<span class="ml-1 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-medium text-slate-600">$1</span>',
-    )
-    // *Not in KB* → muted badge
-    .replace(
-      /\*Not in KB\*/g,
-      '<span class="ml-1 text-[10px] italic text-[hsl(var(--muted-foreground))]">Not in KB</span>',
-    )
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*([^*]+?)\*/g, "<em>$1</em>")
-    .replace(/`(.+?)`/g, '<code class="rounded bg-black/10 px-1 py-0.5 text-[11px] font-mono">$1</code>');
 }
 
 interface TranslationState {

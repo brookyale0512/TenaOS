@@ -7,7 +7,7 @@ export type ReportType = "count" | "cohort" | "indicator" | "pivot";
 export type EventActor = "user" | "gemma" | "middleware" | "system";
 export type ConversationState = "awaiting_name" | "awaiting_question" | "ready";
 
-export type FilterMode = "value_concept" | "value_boolean" | "client_numeric" | "any_value";
+export type FilterMode = "value_concept" | "value_boolean" | "client_numeric" | "condition" | "any_value";
 export type NumericOperator = "eq" | "gt" | "ge" | "lt" | "le";
 export type JoinMode = "and" | "or";
 export type GroupDimension = "sex" | "age_group" | "concept_id" | "date_month";
@@ -26,6 +26,7 @@ export type VisualizationTemplate =
 export interface ReportFilter {
   filterId: string;
   conceptId: string;
+  conceptIds?: string[];
   label: string;
   filterMode: FilterMode;
   valueConceptId: string | null;
@@ -82,6 +83,7 @@ export interface CompiledFilterView {
   filterId: string;
   label: string;
   codeUuid: string;
+  codeUuids?: string[];
   filterMode: FilterMode;
   valueConceptUuid: string | null;
   valueBool: boolean | null;
@@ -127,6 +129,11 @@ export type VisualizationData =
       bars: BarChartDatum[];
       total?: number | null;
       rate?: number | null;
+      numeratorLabel?: string;
+      denominatorLabel?: string;
+      numerator?: number;
+      denominator?: number;
+      remainder?: number;
     }
   | {
       xLabel: string;
@@ -228,7 +235,8 @@ export type ReportOperation =
   | { op: "set_join_mode"; joinMode: JoinMode }
   | {
       op: "add_filter";
-      conceptId: string;
+      conceptId?: string;
+      conceptIds?: string[];
       valueConceptId?: string;
       valueBool?: boolean;
       operator?: NumericOperator;
