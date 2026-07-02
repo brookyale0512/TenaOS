@@ -76,6 +76,12 @@ vitals, and clinical notes so users can immediately exercise patient
 search, charts, queues, reports, notes, vitals, and AI workflows. The
 records are generated locally and contain no real patient data.
 
+> Patient name search can take up to a minute to return results right
+> after first boot while OpenMRS finishes indexing the freshly seeded
+> records. If a search comes back empty immediately after setup
+> reports success, wait briefly and retry before assuming seeding
+> failed.
+
 ## Artifacts On Hugging Face
 
 The repository stays small. Large runtime artifacts are downloaded from
@@ -84,9 +90,16 @@ Hugging Face and bind-mounted at runtime.
 | Artifact | Hugging Face repo | Purpose |
 | --- | --- | --- |
 | Gemma 4 E4B BF16 GGUF + mmproj | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) | On-device text + voice inference through `llama.cpp` |
-| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | Dense retrieval embeddings for KB services |
+| EmbedGemma 300M | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) | Dense retrieval embeddings for the WHO/MSF guideline KB |
+| SapBERT encoder | [`cambridgeltl/SapBERT-from-PubMedBERT-fulltext`](https://huggingface.co/cambridgeltl/SapBERT-from-PubMedBERT-fulltext) | Dense biomedical-concept embeddings for CIEL semantic search |
 | CIEL search SQLite | [`beza4588/tenaos-ciel-search-sqlite`](https://huggingface.co/beza4588/tenaos-ciel-search-sqlite) | Local terminology lookup and concept validation |
 | Qdrant snapshots | [`beza4588/tenaos-qdrant-snapshots`](https://huggingface.co/beza4588/tenaos-qdrant-snapshots) | WHO/MSF guideline and CIEL semantic-search collections |
+
+The CIEL Qdrant snapshot is indexed with SapBERT vectors, not
+EmbedGemma, which is why the SapBERT artifact is required even though
+EmbedGemma also runs in the same container: EmbedGemma serves WHO/MSF
+guideline retrieval, SapBERT serves CIEL concept retrieval, and the two
+are not interchangeable.
 
 If a model requires license acceptance, run `hf auth login` and rerun the
 setup script. The artifact fetcher is idempotent.
@@ -192,17 +205,20 @@ flowchart LR
 
 Both knowledge-base daemons load **EmbedGemma 300M** in-process and share one Qdrant instance for hybrid (dense + BM25) retrieval. Model weights, EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 
-**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) serves Gemma 4 E4B at BF16 with the LoRA adapter weights merged for full-fidelity inference. A tablet tier (consumer Android or ARM device) serves a Q4\_K\_M quantization of the same weights with the merged adapter, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
+**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) serves Gemma 4 E4B at BF16 with the LoRA adapter weights merged for full-fidelity inference. A tablet tier (consumer Android or ARM device) can use a quantized build of the same merged weights when that artifact is present, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
 
 ### Prerequisites
 
 | | Minimum |
 |---|---|
 | **OS** | Linux x86-64 |
-| **GPU VRAM** | 16 GB |
+| **GPU VRAM** | 16 GB per running instance |
 | **System RAM** | 16 GB |
-| **Disk** | 30 GB |
+| **Disk** | ~35 GB per instance: ~21 GB of bind-mounted artifacts (`bash scripts/fetch-models.sh`) plus ~11 GB for the built image. The 30 GB figure some earlier builds quoted only covered the artifacts, not the image. |
 | **Docker** | 24.0+ with `nvidia-container-toolkit` |
+
+These are per-instance numbers. See "Running Multiple Instances" below
+if you're deploying more than one TenaOS on the same host.
 
 ### Manual Setup
 
@@ -213,9 +229,50 @@ cp demo.env.example .env
 docker compose up -d
 ```
 
+If your Docker install doesn't have the Compose plugin
+(`docker compose version` prints "'compose' is not a docker command"),
+use the standalone `docker-compose` binary instead — every flag in
+this README works identically with either one:
+
+```bash
+docker-compose up -d
+```
+
+`scripts/setup-demo.sh` already detects and falls back between the two
+automatically; this only matters if you're running the manual steps
+directly.
+
 To self-host artifacts on your own Hugging Face org, override
 `TENAOS_HF_GEMMA_REPO`, `TENAOS_HF_CIEL_REPO`, `TENAOS_HF_QDRANT_REPO`,
-or `TENAOS_HF_EMBED_REPO` before running `fetch-models.sh`.
+`TENAOS_HF_EMBED_REPO`, or `TENAOS_HF_SAPBERT_REPO` before running
+`fetch-models.sh`.
+
+### Running Multiple Instances
+
+TenaOS containers are safe to run side by side on one host — each
+instance needs its own values for four things:
+
+| What | Variable | Why |
+|---|---|---|
+| Host port | `TENAOS_HOST_PORT` / `--port` | Avoid colliding with another instance or any other service already bound to that port. |
+| Container name | `TENAOS_CONTAINER_NAME` | Docker container names must be unique per host. |
+| Image tag | `TENAOS_IMAGE_NAME` | Without this, every instance builds and tags the same `tenaos:latest`, so building instance B silently retags the image instance A was built from (the running container is unaffected, but a later rebuild of A would pull B's image). |
+| Compose project name | `COMPOSE_PROJECT_NAME` | Compose namespaces named volumes (OpenMRS/MariaDB/Qdrant data) by project name, which defaults to the checkout's directory name. Set this explicitly so two clones never share a volume by accident. |
+
+```bash
+TENAOS_CONTAINER_NAME=TenaOS_clinic2 \
+TENAOS_IMAGE_NAME=tenaos-clinic2 \
+COMPOSE_PROJECT_NAME=tenaos_clinic2 \
+bash scripts/setup-demo.sh --port 8090 --target-dir ./tenaos-bootstrap
+```
+
+Each instance also needs its own artifact set — point `--target-dir`
+(or `TENAOS_BOOTSTRAP_DIR`) at a directory that isn't shared with
+another instance's `tenaos-bootstrap/`, so each has an independent
+`llama.cpp` process and model files. Budget VRAM and disk as a
+multiple of the per-instance numbers above; a 16 GB-VRAM model
+comfortably fits several times over on a data-center GPU (e.g. two
+BF16 instances use well under half of an 80 GB A100).
 
 ---
 
@@ -355,7 +412,7 @@ flowchart LR
     CandidatePrompts --> OptimizedPrompts["Optimized Prompts"]
 ```
 
-| Metric | Seed | GEPA | +LoRA |
+| Metric | Seed | GEPA | +LoRA target |
 |---|---|---|---|
 | Form CIEL coverage score | 0.118 | 0.246 | 0.341 |
 | Report coverage score | 0.274 | 0.492 | 0.611 |
@@ -363,30 +420,30 @@ flowchart LR
 | Schema-valid rate | 0.993 | 0.997 | 0.999 |
 | Hallucinated / retired-code rate | 3.1% | 1.2% | 0.4% |
 
-Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma; +LoRA = optimized prompt + merged adapter. The CIEL and report subsets are deliberately terminology-hard; the relevant signal is the lift across stages.
+Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma; +LoRA target = optimized prompt + merged adapter target from the prior evidence package. The completed QLoRA adapter is evaluated on held-out workflow suites after merge before these target values are presented as final system outcomes.
 
 ---
 
 ## LoRA Fine-Tuning
 
-TenaOS ships a **single task-tagged LoRA adapter** that serves every workflow. Rather than maintaining one model per feature, the adapter is trained multi-task over all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter weights are merged at deployment alongside Gemma 4 E4B (BF16 on the edge tier, merged into the Q4\_K\_M build on the tablet tier).
+TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter weights have been published with merged artifacts for the BF16 edge build; workflow-level quality metrics are evaluated separately after adapter merge.
 
-Against the base model, the adapter lifts form concept recall from 0.465 to 0.71, cuts the hallucinated/retired-code rate from 3.1% to 0.4%, and trims median form latency from 17.97 s to 16.5 s by reducing redundant tool calls.
-
-**Training corpus:** 27,821 validated traces across seven task families.
+**Training corpus:** 16,005 validated traces across seven task families.
 
 | Task family | Traces | Tag |
 |---|---|---|
-| Form / workflow building | 4,932 | `[form]` |
-| Report generation | 2,441 | `[report]` |
-| Scribe, English text | 3,581 | `[scribe]` |
-| Scribe, English audio | 4,625 | `[scribe]` |
-| Scribe, Amharic text | 3,421 | `[scribe-am]` |
-| Scribe, Amharic voice | 3,821 | `[scribe-am]` |
-| CDS + patient education | 5,000 | `[cds]` / `[edu]` |
-| **Total** | **27,821** | one adapter |
+| Form / workflow building | 3,363 | `[form]` |
+| Report generation | 1,723 | `[report]` |
+| Scribe, English text | 1,050 | `[scribe]` |
+| Scribe, English audio | 796 | `[scribe]` |
+| Scribe, Amharic text | 1,453 | `[scribe-am]` |
+| Clinical decision support | 3,806 | `[cds]` |
+| Patient education | 3,814 | `[edu]` |
+| **Total** | **16,005** | one adapter |
 
-Configuration: rank 16, alpha 32, dropout 0.05, adapters on attention and MLP projections, approximately 3 epochs over the validated corpus, base Gemma 4 E4B BF16. Validation rejects PHI-like samples, retired concepts, wrong datatypes, duplicate CIEL codes, and records outside training-readiness criteria; only clean, standards-correct trajectories reach the adapter.
+Configuration: 4-bit QLoRA, rank 16, alpha 32, dropout 0.05, adapters on language attention and MLP projections, 4,096-token sequence length, and 3 epochs over the validated corpus. The run completed 5,379 steps in 29.5 hours on an A100 80GB, with final train loss 0.0509 and final eval loss 1.1946. Validation rejects PHI-like samples, retired concepts, wrong datatypes, duplicate CIEL codes, and records outside training-readiness criteria; only clean, standards-correct trajectories reach the adapter.
+
+Published training artifacts include the corpus-counts table, training-runtime chart, training-loss chart, eval-loss-by-checkpoint chart, checkpoint-metrics table, adapter metadata, and merged model artifacts. The corpus-funnel and task-mix charts are retained as internal audit assets and are not embedded in the public README.
 
 ---
 
@@ -396,32 +453,12 @@ The evaluation separates technical verification from clinical validation. Result
 
 | Workflow | Key metrics | Completed evidence |
 |---|---|---|
-| Form builder and GEPA | CIEL-expanded recall, schema-valid rate, hallucinated/retired-code rate, latency | 147/147 prompts, 0 failures, 0.71 recall (LoRA), 0.999 schema-valid, 0.4% bad-code rate, 16.5 s median |
+| Form builder and GEPA | CIEL-expanded recall, schema-valid rate, hallucinated/retired-code rate, latency | GEPA eval package complete; post-adapter workflow evaluation follows adapter merge |
 | WHO/MSF retrieval | Retrieval scale, hybrid retrieval, citation grounding | 69,476 chunks (EmbedGemma + BM25); 448.8 MB Qdrant snapshot |
 | CIEL retrieval and validation | Concept/mapping coverage, retired handling, bundle hydration | 58,687 concepts, 298,905 mappings, 8,545 Q&A edges, 3,259 set edges |
 | Scribe | SOAP completeness, concept F1, ASR WER, unresolved handling | 0.88 concept F1, 0.95 SOAP completeness; ASR WER 6.5% (en) / 13.8% (am) |
 | Report builder | Query-plan correctness, count accuracy, compile success | 0.90 plan correctness, 0.88 count accuracy, 0.99 compile success |
 | CDS and patient education | Citation grounding, unsupported-rec rate, dose safety | 0.94 cited, 1.6% unsupported, 99.5% no-invented-dose |
-
----
-
-## Results Snapshot
-
-The table below summarizes the system's verified implementation status, measured corpus scale, and internal evaluation outcomes across all workflows.
-
-| Result | Status | Interpretation |
-|---|---|---|
-| Single-container runtime: OpenMRS, Gemma 4 E4B, TenaAgent, Qdrant, WHO/MSF KB, CIEL KB, MariaDB | `IMPLEMENTED` | Architecture present in source and deployment configuration. |
-| WHO/MSF KB: 401 JSONL files, 69,476 chunks | `MEASURED` | Corpus-scale coverage of indexed material, not answer quality. |
-| WHO/MSF Qdrant snapshot: 448.8 MB | `MEASURED` | Deployment footprint for the guideline index. |
-| CIEL SQLite: 58,687 concepts, 298,905 mappings, 8,545 Q&A, 3,259 set edges | `MEASURED` | Terminology scale for deterministic validation. |
-| CIEL Qdrant snapshot: 326.3 MB | `MEASURED` | Deployment footprint for semantic discovery. |
-| LoRA adapter: one task-tagged adapter trained on 27,821 traces, merged into the runtime | `IMPLEMENTED` | Single multi-task adapter routed by task tag; merged with Gemma at deployment. |
-| Form eval (LoRA-adapted): 147/147, 0 failures, 0.71 recall, 0.999 schema-valid, 16.5 s | `INTERNAL EVAL` | Recall up from 0.465 base to 0.71 with the merged adapter. |
-| GEPA to LoRA lift: form 0.118 to 0.246 to 0.341; report 0.274 to 0.492 to 0.611 | `INTERNAL EVAL` | Seed to GEPA to adapter on terminology-hard subsets. |
-| Scribe: 0.88 concept F1; ASR WER 6.5% en / 13.8% am | `INTERNAL EVAL` | Text, voice, and image input; native Amharic speech. |
-| Report builder: 0.90 plan correctness, 0.88 count accuracy | `INTERNAL EVAL` | Deterministic FHIR compilation from plain language. |
-| CDS and education: 0.94 cited, 1.6% unsupported, 99.5% no-invented-dose | `INTERNAL EVAL` | Grounded, abstaining output over the local KB. |
 
 ---
 
