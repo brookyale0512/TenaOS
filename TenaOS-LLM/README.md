@@ -2,21 +2,27 @@
 
 The inference runtime inside the TenaOS container. A `llama.cpp` CUDA
 server hosting
-[Gemma 4 E4B + task-tagged LoRA, merged](https://huggingface.co/beza4588/TenaOS)
-at F16 precision, exposed on container localhost over the standard
+[Gemma 4 E4B](https://huggingface.co/beza4588/TenaOS)
+at BF16/F16 precision, exposed on container localhost over the standard
 OpenAI `/v1/chat/completions` API.
 
-TenaOS serves the merged LoRA build, not plain base
+TenaOS normally serves the merged LoRA build, not plain base
 [Gemma 4 E4B Instruct](https://huggingface.co/google/gemma-4-E4B-it) —
 the adapter is what routes the `[form]`, `[report]`, `[scribe]`,
 `[scribe-am]`, `[cds]`, and `[edu]` task tags described in the top-level
 README.
 
+> **Temporary notice:** the published adapter is currently being
+> retrained to fix a data/production parity gap. Until it's validated
+> and republished, this build serves the plain base BF16 model instead
+> (see `docker/start-llama.sh` and the top-level README notice) — task
+> tag routing is inactive until the revert.
+
 Only `TenaAgent` talks to this service. The browser never does.
 
 ## Why these choices
 
-| Why llama.cpp | Why the merged F16 GGUF |
+| Why llama.cpp | Why the (normally merged) F16 GGUF |
 | --- | --- |
 | Native multimodal projector for Gemma 4 audio input | Full precision; no quantization artifacts |
 | Small single-process serving stack | Single ~15 GB file, easy to bind-mount, no separate adapter-loading step |
@@ -47,7 +53,7 @@ variables (set in [`docker/start-llama.sh`](../docker/start-llama.sh)):
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `TENAOS_LLM_GGUF`    | `/models/tenaos-gemma-4-E4B-it-lora-F16.gguf` | Generation model (merged base + LoRA) |
+| `TENAOS_LLM_GGUF`    | `/models/gemma-4-E4B-it-BF16.gguf` (temporary — normally `/models/tenaos-gemma-4-E4B-it-lora-F16.gguf`, merged base + LoRA) | Generation model |
 | `TENAOS_LLM_MMPROJ`  | `/models/mmproj-gemma-4-E4B-it-bf16.gguf`     | Audio projector (base, unaffected by the LoRA merge) |
 | `TENAOS_LLM_MODEL`   | `gemma-4`                                     | Alias served by the API |
 | `TENAOS_LLM_CTX_SIZE`| `0`                                           | 0 = the model's native ctx |

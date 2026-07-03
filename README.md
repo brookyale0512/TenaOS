@@ -28,6 +28,16 @@ deployed as a single Docker image.
 
 </div>
 
+> **Temporary notice:** the published task-tagged LoRA adapter is
+> currently being retrained to fix a data/production parity gap. Until
+> the new adapter is validated and republished, `scripts/fetch-models.sh`
+> downloads and `docker/start-llama.sh` serves the **plain base
+> Gemma 4 E4B model** rather than the merged-LoRA build described
+> throughout this README. Task-tag routing (`[form]`, `[report]`,
+> `[scribe]`, `[cds]`, `[edu]`) is inactive on this build; everything
+> else (OpenMRS, CIEL, KB retrieval, agent loops) is unaffected. See
+> [`models/README.md`](models/README.md) for details.
+
 ---
 
 TenaOS turns natural language into standards-based clinical workflows.
@@ -200,7 +210,7 @@ flowchart LR
 
 Both knowledge-base daemons load **EmbedGemma 300M** in-process and share one Qdrant instance for hybrid (dense + BM25) retrieval. Model weights, EmbedGemma, and the CIEL SQLite are bind-mounted from the host.
 
-**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) serves Gemma 4 E4B at full-precision F16 with the LoRA adapter weights merged in — this is the artifact `scripts/fetch-models.sh` downloads and `docker/start-llama.sh` serves by default. A tablet tier (consumer Android or ARM device) can use a quantized build of the same merged weights when that artifact is present, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
+**Deployment tiers.** The same stack ships in two hardware profiles from one image. An edge-server tier (mini-PC, 16--32 GB RAM, optional small GPU) normally serves Gemma 4 E4B at full-precision F16 with the LoRA adapter weights merged in. *(Temporarily, `scripts/fetch-models.sh` downloads and `docker/start-llama.sh` serves the plain base BF16 model instead — see the notice above.)* A tablet tier (consumer Android or ARM device) can use a quantized build of the same merged weights when that artifact is present, trading a small quality margin for a footprint that runs without a dedicated server. Model inference, OpenMRS, CIEL, and Qdrant remain fully local in both tiers.
 
 ### Prerequisites
 
@@ -421,7 +431,7 @@ Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma; +Lo
 
 ## LoRA Fine-Tuning
 
-TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter is merged into the F16 edge-tier weights and is what every TenaOS deployment serves by default (`tenaos-gemma-4-E4B-it-lora-F16.gguf`, not the plain base model); workflow-level quality metrics are evaluated separately after adapter merge.
+TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter is merged into the F16 edge-tier weights and is normally what every TenaOS deployment serves by default (`tenaos-gemma-4-E4B-it-lora-F16.gguf`, not the plain base model); workflow-level quality metrics are evaluated separately after adapter merge. **The adapter is currently being retrained (see the temporary notice above) — deployments built from this commit serve the plain base model until the new adapter is republished.**
 
 **Training corpus:** 16,005 validated traces across seven task families.
 
@@ -528,15 +538,17 @@ Each top-level component has a README with the same
 
 | Component | Model |
 |---|---|
-| Generation | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) — [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it) + the TenaOS task-tagged LoRA adapter, **merged**, F16 GGUF |
+| Generation | [`beza4588/TenaOS`](https://huggingface.co/beza4588/TenaOS) — [`google/gemma-4-E4B-it`](https://huggingface.co/google/gemma-4-E4B-it), *temporarily* the plain base BF16 GGUF (normally + the TenaOS task-tagged LoRA adapter, merged, F16 GGUF — see the notice above) |
 | Guideline retrieval embeddings | [`google/embeddinggemma-300m`](https://huggingface.co/google/embeddinggemma-300m) |
 | CIEL retrieval embeddings | [`cambridgeltl/SapBERT-from-PubMedBERT-fulltext`](https://huggingface.co/cambridgeltl/SapBERT-from-PubMedBERT-fulltext) |
 
-The generation model is the **merged** build, not plain base
-`google/gemma-4-E4B-it` — TenaOS always deploys base + adapter merged
+The generation model is normally the **merged** build, not plain base
+`google/gemma-4-E4B-it` — TenaOS normally deploys base + adapter merged
 into a single F16 GGUF so the `[form]`/`[report]`/`[scribe]`/`[cds]`/`[edu]`
-task-tag routing described above is active by default. Native audio
-rides on Gemma 4's `mmproj` projector through `llama.cpp`.
+task-tag routing described above is active by default. **This build is a
+temporary exception** (adapter retrain in progress — see the notice
+above) and serves the plain base model. Native audio rides on Gemma 4's
+`mmproj` projector through `llama.cpp`.
 
 ## Status
 

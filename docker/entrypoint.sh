@@ -57,10 +57,14 @@ export OPENMRS_SERVICE_USER="${OPENMRS_SERVICE_USER:-admin}"
 export OPENMRS_SERVICE_PASSWORD="${OPENMRS_SERVICE_PASSWORD:-$OPENMRS_ADMIN_PASSWORD}"
 
 # ── Verify GGUF weights are mounted ──────────────────────────────────────
-# TenaOS always serves the merged Gemma 4 E4B + task-tagged LoRA GGUF, not
-# the plain base model (see https://huggingface.co/beza4588/TenaOS).
-if [ ! -f /models/tenaos-gemma-4-E4B-it-lora-F16.gguf ]; then
-  log "ERROR: /models/tenaos-gemma-4-E4B-it-lora-F16.gguf not found."
+# TEMPORARY: the published LoRA adapter is being retrained to fix a data/
+# production parity gap (see TenaOS repo history), so this build serves the
+# plain base Gemma 4 E4B GGUF instead of the merged LoRA build until the new
+# adapter is validated and republished. Revert to
+# tenaos-gemma-4-E4B-it-lora-F16.gguf (see https://huggingface.co/beza4588/TenaOS)
+# once that lands.
+if [ ! -f /models/gemma-4-E4B-it-BF16.gguf ]; then
+  log "ERROR: /models/gemma-4-E4B-it-BF16.gguf not found."
   log "Bind-mount your host models directory at /models, e.g.:"
   log "  -v \$(pwd)/models:/models:ro"
   exit 1
