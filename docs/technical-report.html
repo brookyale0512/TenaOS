@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="TenaOS Technical Report — a local-first clinical AI operating system built on OpenMRS and Gemma 4 E4B." />
+<title>TenaOS · Technical Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Newsreader:ital,opt@0,7..72;1,7..72&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0f17;
+    --bg-soft: #111726;
+    --bg-card: #141b2c;
+    --bg-elev: #18213400;
+    --border: #243049;
+    --border-soft: #1c2740;
+    --text: #e6ecf7;
+    --text-dim: #9fb0cc;
+    --text-faint: #6b7c9c;
+    --accent: #4f9cf9;
+    --accent-2: #38d6b0;
+    --accent-3: #b78bff;
+    --accent-warm: #ffb86b;
+    --glow: rgba(79, 156, 249, 0.35);
+    --ring: rgba(79, 156, 249, 0.25);
+    --code-bg: #0e1422;
+    --shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.75);
+    --maxw: 880px;
+    --radius: 16px;
+    --sans: "Inter", system-ui, -apple-system, sans-serif;
+    --serif: "Newsreader", Georgia, serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+  [data-theme="light"] {
+    --bg: #f6f8fc;
+    --bg-soft: #ffffff;
+    --bg-card: #ffffff;
+    --border: #e2e8f4;
+    --border-soft: #eef2f9;
+    --text: #15233b;
+    --text-dim: #4a5b78;
+    --text-faint: #8595b0;
+    --accent: #2563eb;
+    --accent-2: #0d9488;
+    --accent-3: #7c3aed;
+    --accent-warm: #d97706;
+    --glow: rgba(37, 99, 235, 0.18);
+    --ring: rgba(37, 99, 235, 0.18);
+    --code-bg: #0e1422;
+    --shadow: 0 18px 50px -24px rgba(40, 60, 110, 0.30);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 90px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(900px 500px at 12% -8%, rgba(79,156,249,0.10), transparent 60%),
+      radial-gradient(800px 520px at 100% 0%, rgba(183,139,255,0.08), transparent 55%),
+      radial-gradient(700px 600px at 50% 120%, rgba(56,214,176,0.06), transparent 60%);
+  }
+
+  /* ---------- top progress + nav ---------- */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent-3));
+    z-index: 100; transition: width 0.1s linear;
+    box-shadow: 0 0 12px var(--glow);
+  }
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 90;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px;
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+    backdrop-filter: blur(14px) saturate(150%);
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: -0.02em; }
+  .brand .logo {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: conic-gradient(from 200deg, var(--accent), var(--accent-3), var(--accent-2), var(--accent));
+    display: grid; place-items: center; color: #fff; font-weight: 900; font-size: 15px;
+    box-shadow: 0 0 18px var(--glow);
+  }
+  .brand small { display:block; font-weight: 500; font-size: 11px; color: var(--text-faint); letter-spacing: 0.02em; }
+  .topbar-actions { display: flex; align-items: center; gap: 8px; }
+  .btn {
+    border: 1px solid var(--border); background: var(--bg-card); color: var(--text-dim);
+    height: 36px; padding: 0 13px; border-radius: 10px; cursor: pointer;
+    font-family: var(--sans); font-size: 13px; font-weight: 600; display: inline-flex;
+    align-items: center; gap: 7px; transition: all 0.18s ease;
+  }
+  .btn:hover { color: var(--text); border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 6px 18px -8px var(--glow); }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* ---------- layout ---------- */
+  .shell { position: relative; z-index: 1; display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 0; max-width: 1320px; margin: 0 auto; }
+  .sidebar {
+    position: sticky; top: 60px; align-self: start; height: calc(100vh - 60px);
+    overflow-y: auto; padding: 26px 16px 60px 22px; border-right: 1px solid var(--border-soft);
+  }
+  .sidebar::-webkit-scrollbar { width: 8px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+  .toc-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-faint); font-weight: 700; margin: 6px 10px 14px; }
+  .toc a {
+    display: block; padding: 7px 12px; margin: 1px 0; border-radius: 9px;
+    color: var(--text-dim); text-decoration: none; font-size: 13.5px; font-weight: 500;
+    border-left: 2px solid transparent; transition: all 0.15s ease; position: relative;
+  }
+  .toc a:hover { color: var(--text); background: var(--bg-card); }
+  .toc a.active { color: var(--accent); background: var(--ring); border-left-color: var(--accent); font-weight: 600; }
+  .toc a.sub { padding-left: 26px; font-size: 12.5px; }
+
+  main { padding: 92px 56px 120px; max-width: calc(var(--maxw) + 112px); }
+  section { scroll-margin-top: 80px; margin-bottom: 16px; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 18px 0 30px; border-bottom: 1px solid var(--border-soft); margin-bottom: 38px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.16em; color: var(--accent-2);
+    padding: 6px 13px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg-card); margin-bottom: 22px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1; transform:scale(1);} 50%{opacity:0.5; transform:scale(0.7);} }
+  h1.title {
+    font-family: var(--sans); font-size: clamp(38px, 6vw, 64px); line-height: 1.02; margin: 0 0 8px;
+    font-weight: 900; letter-spacing: -0.035em;
+    background: linear-gradient(120deg, var(--text) 30%, var(--accent) 70%, var(--accent-3));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .subtitle { font-family: var(--serif); font-size: clamp(18px, 2.4vw, 23px); color: var(--text-dim); font-style: italic; max-width: 720px; margin: 0 0 26px; line-height: 1.5; }
+  .lede {
+    font-size: 17px; color: var(--text); border-left: 3px solid var(--accent);
+    padding: 4px 0 4px 20px; max-width: 760px; margin: 0 0 22px;
+  }
+  .meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .chip {
+    font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+    padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-card);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .chip b { color: var(--accent); }
+
+  /* ---------- typography ---------- */
+  main h2 {
+    font-size: clamp(26px, 3.4vw, 34px); font-weight: 800; letter-spacing: -0.025em;
+    margin: 56px 0 6px; padding-top: 10px; scroll-margin-top: 84px; line-height: 1.15;
+  }
+  main h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 12px; font-weight: 700; -webkit-text-fill-color: var(--accent); }
+  .h2-rule { height: 1px; background: linear-gradient(90deg, var(--border), transparent); margin: 14px 0 26px; }
+  main h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 34px 0 12px; color: var(--text); }
+  main h3::before { content: "▹"; color: var(--accent-2); margin-right: 10px; font-size: 16px; }
+  main p { color: var(--text-dim); margin: 14px 0; font-size: 16px; }
+  main p strong, main li strong { color: var(--text); font-weight: 700; }
+  main a { color: var(--accent); }
+  main ul, main ol { color: var(--text-dim); padding-left: 22px; }
+  main li { margin: 8px 0; font-size: 16px; }
+  main li::marker { color: var(--accent); }
+  code:not(pre code) {
+    font-family: var(--mono); font-size: 0.86em; background: var(--code-bg); color: var(--accent-warm);
+    padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border-soft); white-space: nowrap;
+  }
+  [data-theme="light"] code:not(pre code) { color: #ffd9a8; }
+
+  /* ---------- callout / abstract ---------- */
+  .abstract {
+    background: linear-gradient(160deg, var(--bg-card), color-mix(in srgb, var(--bg-card) 80%, var(--accent) 6%));
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 26px 30px;
+    margin: 8px 0 10px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  }
+  .abstract::before { content:""; position:absolute; top:0; left:0; width:4px; height:100%; background: linear-gradient(var(--accent), var(--accent-3)); }
+
+  /* ---------- stat cards ---------- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin: 26px 0; }
+  .stat {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 18px 16px;
+    position: relative; overflow: hidden; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s;
+  }
+  .stat:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 16px 36px -18px var(--glow); }
+  .stat::after { content:""; position:absolute; inset:0; background: radial-gradient(120px 80px at 90% 0%, var(--glow), transparent 70%); opacity:0.6; pointer-events:none; }
+  .stat .v { font-size: 30px; font-weight: 900; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums;
+    background: linear-gradient(120deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  .stat .k { font-size: 12.5px; color: var(--text-dim); margin-top: 8px; font-weight: 500; line-height: 1.4; }
+
+  /* ---------- feature/contribution cards ---------- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin: 24px 0; }
+  .card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 22px;
+    transition: transform 0.2s ease, border-color 0.2s; position: relative;
+  }
+  .card:hover { transform: translateY(-3px); border-color: var(--accent-3); }
+  .card .badge {
+    width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 900; font-size: 16px;
+    background: linear-gradient(140deg, var(--accent), var(--accent-3)); color: #fff; margin-bottom: 14px;
+    box-shadow: 0 8px 20px -8px var(--glow);
+  }
+  .card h4 { margin: 0 0 8px; font-size: 16.5px; font-weight: 700; color: var(--text); }
+  .card p { margin: 0; font-size: 14.5px; color: var(--text-dim); }
+
+  /* ---------- mermaid figure ---------- */
+  figure.diagram {
+    margin: 28px 0; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  figure.diagram .diagram-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 14px 12px; border-bottom: 1px dashed var(--border-soft); margin-bottom: 6px;
+  }
+  figure.diagram .diagram-head .dh-title { font-size: 12.5px; font-weight: 700; color: var(--text-dim); letter-spacing: 0.02em; display:flex; align-items:center; gap:8px; }
+  figure.diagram .dots { display:flex; gap:6px; }
+  figure.diagram .dots i { width:10px; height:10px; border-radius:50%; display:block; }
+  figure.diagram .dots i:nth-child(1){ background:#ff5f57; } figure.diagram .dots i:nth-child(2){ background:#febc2e; } figure.diagram .dots i:nth-child(3){ background:#28c840; }
+  .mermaid { text-align: center; padding: 18px 8px; overflow-x: auto; }
+  .mermaid svg { max-width: 100%; height: auto; }
+
+  /* ---------- tables ---------- */
+  .table-wrap { overflow-x: auto; margin: 24px 0; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+  thead th {
+    text-align: left; padding: 14px 16px; background: var(--bg-soft); color: var(--text);
+    font-weight: 700; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border); position: sticky; top: 60px;
+  }
+  tbody td { padding: 13px 16px; border-bottom: 1px solid var(--border-soft); color: var(--text-dim); vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--bg-card) 60%, transparent); }
+  tbody td:first-child { color: var(--text); font-weight: 600; }
+  .tag { display:inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.03em; white-space: nowrap; }
+  .tag.measured { background: rgba(56,214,176,0.14); color: var(--accent-2); border: 1px solid rgba(56,214,176,0.3); }
+  .tag.impl { background: rgba(79,156,249,0.14); color: var(--accent); border: 1px solid rgba(79,156,249,0.3); }
+  .tag.eval { background: rgba(183,139,255,0.14); color: var(--accent-3); border: 1px solid rgba(183,139,255,0.3); }
+
+  /* ---------- pipeline steps ---------- */
+  ol.steps { counter-reset: step; list-style: none; padding: 0; margin: 22px 0; }
+  ol.steps li {
+    position: relative; padding: 4px 0 18px 50px; margin: 0; border-left: 2px solid var(--border); margin-left: 16px;
+  }
+  ol.steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+  ol.steps li::before {
+    counter-increment: step; content: counter(step); position: absolute; left: -16px; top: -2px;
+    width: 32px; height: 32px; border-radius: 50%; background: var(--bg-card); border: 1px solid var(--accent);
+    color: var(--accent); font-weight: 800; font-size: 13px; display: grid; place-items: center;
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+
+  /* ---------- footer ---------- */
+  footer {
+    border-top: 1px solid var(--border-soft); margin-top: 70px; padding: 40px 0 10px;
+    color: var(--text-faint); font-size: 13.5px;
+  }
+  footer .f-grid { display:flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; align-items:center; }
+  .safety-note {
+    background: color-mix(in srgb, var(--bg-card) 90%, var(--accent-warm) 8%);
+    border: 1px solid var(--border); border-left: 3px solid var(--accent-warm);
+    border-radius: 12px; padding: 16px 20px; margin: 22px 0; font-size: 14.5px; color: var(--text-dim);
+  }
+  .safety-note b { color: var(--accent-warm); }
+
+  .back-top {
+    position: fixed; right: 24px; bottom: 24px; z-index: 80; width: 46px; height: 46px; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer;
+    display: grid; place-items: center; opacity: 0; pointer-events: none; transition: all 0.25s ease; box-shadow: var(--shadow);
+  }
+  .back-top.show { opacity: 1; pointer-events: auto; }
+  .back-top:hover { border-color: var(--accent); transform: translateY(-3px); }
+
+  /* reveal */
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+
+  @media (max-width: 1000px) {
+    .shell { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    main { padding: 84px 22px 90px; max-width: 100%; }
+  }
+  @media print {
+    .topbar, .sidebar, .back-top, #progress { display: none !important; }
+    body::before { display: none; }
+    .shell { display: block; }
+    main { padding: 0; max-width: 100%; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+    figure.diagram, .stat, .card, .table-wrap { box-shadow: none; break-inside: avoid; }
+    section { break-inside: avoid-page; }
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">T</div>
+    <div>TenaOS <small>Technical Report</small></div>
+  </div>
+  <div class="topbar-actions">
+    <button class="btn" id="themeBtn" title="Toggle theme">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
+      <span id="themeLabel">Light</span>
+    </button>
+    <button class="btn" id="printBtn" title="Print or save as PDF">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M8 14h8v7H8z"/></svg>
+      <span>PDF</span>
+    </button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar">
+    <div class="toc-title">Contents</div>
+    <div class="toc" id="toc">
+      <a href="#abstract">Abstract</a>
+      <a href="#contributions">Contributions</a>
+      <a href="#scope">Naming &amp; Model Scope</a>
+      <a href="#requirements">Design Requirements</a>
+      <a href="#overview">System Overview</a>
+      <a href="#knowledge">Knowledge Systems</a>
+      <a href="#guideline-kb" class="sub">WHO/MSF Guideline KB</a>
+      <a href="#ciel-kb" class="sub">CIEL Terminology KB</a>
+      <a href="#features">Feature Architecture</a>
+      <a href="#form-builder" class="sub">Form Builder</a>
+      <a href="#scribe" class="sub">SOAP Scribe</a>
+      <a href="#cds" class="sub">Clinical Decision Support</a>
+      <a href="#education" class="sub">Patient Education</a>
+      <a href="#reporting" class="sub">Plain-Language Reporting</a>
+      <a href="#gepa">GEPA Optimization</a>
+      <a href="#lora">LoRA Data Infrastructure</a>
+      <a href="#evaluation">Evaluation Methodology</a>
+      <a href="#safety">Responsible AI &amp; Safety</a>
+      <a href="#governance">Clinical Governance</a>
+      <a href="#repro">Reproducibility</a>
+      <a href="#references">References</a>
+    </div>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <span class="eyebrow"><span class="dot"></span> Local-First Clinical AI · Technical System Document</span>
+      <h1 class="title">TenaOS Technical Report</h1>
+      <p class="subtitle">Gemma proposes, middleware verifies, clinicians approve, and OpenMRS persists.</p>
+      <p class="lede">A local-first clinical AI operating system for primary-care clinics, built on OpenMRS, powered by Gemma 4 E4B, and designed around a single safety invariant.</p>
+      <div class="meta-row">
+        <span class="chip">Runtime · <b>Gemma 4 E4B BF16 GGUF</b></span>
+        <span class="chip">Record system · <b>OpenMRS</b></span>
+        <span class="chip">Retrieval · <b>Qdrant Hybrid</b></span>
+        <span class="chip">Adaptation · <b>GEPA → LoRA</b></span>
+      </div>
+    </div>
+
+    <section id="abstract" class="reveal">
+      <h2><span class="num">00</span>Abstract</h2>
+      <div class="h2-rule"></div>
+      <div class="abstract">
+        <p>TenaOS is a local-first clinical AI operating system that lets primary-care clinics build and operate standards-based digital health workflows through natural language. It combines OpenMRS, Gemma 4 E4B, a WHO/MSF guideline knowledge base, a CIEL terminology knowledge base, deterministic middleware, and clinician review inside a locally deployable stack.</p>
+        <p>The problem TenaOS addresses is <strong>implementation failure</strong>. Clinics need forms, terminology mappings, reporting logic, guideline support, and localized patient communication, but the expertise to configure those systems is usually external, expensive, and temporary. TenaOS turns that implementation work into a local, auditable, clinician-reviewed agent workflow.</p>
+        <p>The system runs as a single local container with OpenMRS, MariaDB, Qdrant, Gemma 4 E4B served through <code>llama.cpp</code>, and the TenaAgent orchestration service. The model never writes directly to OpenMRS. It operates through allow-listed tools and structured draft stores; final writes go through deterministic validation and clinician approval.</p>
+      </div>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" data-count="58687">58,687</div><div class="k">CIEL concepts in local SQLite store</div></div>
+        <div class="stat"><div class="v" data-count="298905">298,905</div><div class="k">Concept mappings</div></div>
+        <div class="stat"><div class="v" data-count="69476">69,476</div><div class="k">WHO/MSF guideline chunks indexed</div></div>
+        <div class="stat"><div class="v" data-count="147">147/147</div><div class="k">Form prompts completed · 0 failures</div></div>
+        <div class="stat"><div class="v">0.993</div><div class="k">Schema-valid rate</div></div>
+        <div class="stat"><div class="v">17.97s</div><div class="k">Median form-builder latency</div></div>
+      </div>
+    </section>
+
+    <section id="contributions" class="reveal">
+      <h2><span class="num">01</span>Contributions</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS makes four technical contributions.</p>
+      <div class="cards">
+        <div class="card"><div class="badge">1</div><h4>A local-first clinical AI runtime</h4><p>Packages OpenMRS, Gemma 4 E4B, local guideline retrieval, local terminology retrieval, and TenaAgent into a single deployable stack.</p></div>
+        <div class="card"><div class="badge">2</div><h4>Two complementary knowledge bases</h4><p>The WHO/MSF KB grounds recommendations in guideline evidence; the CIEL KB resolves natural language to standards-based OpenMRS concepts.</p></div>
+        <div class="card"><div class="badge">3</div><h4>A constrained clinical agent pattern</h4><p>Gemma acts as planner and proposer through allow-listed tools, while concept validation, schema construction, query compilation, and persistence stay deterministic.</p></div>
+        <div class="card"><div class="badge">4</div><h4>A GEPA-first adaptation path</h4><p>Many clinical agent failures are instruction and tool-use failures before they are weight failures. TenaOS optimizes prompts against the real pipeline before training LoRA adapters.</p></div>
+      </div>
+    </section>
+
+    <section id="scope" class="reveal">
+      <h2><span class="num">02</span>Naming &amp; Model Scope</h2>
+      <div class="h2-rule"></div>
+      <p>This report uses <strong>TenaOS</strong> as the canonical product name. The technical artifacts, code paths, and diagrams in this report use TenaOS consistently.</p>
+      <p>All runtime code, artifacts, and evaluation results refer to <strong>Gemma 4 E4B BF16 GGUF</strong> served via <code>llama.cpp</code>, with the Gemma multimodal projector for audio input.</p>
+    </section>
+
+    <section id="requirements" class="reveal">
+      <h2><span class="num">03</span>Design Requirements</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS targets clinics that cannot assume continuous internet, cloud inference, or a local implementation team. The system is built around these requirements:</p>
+      <div class="cards">
+        <div class="card"><h4>Local ownership</h4><p>Patient data and model inference stay on facility-owned infrastructure.</p></div>
+        <div class="card"><h4>Standards compatibility</h4><p>OpenMRS remains the record system; CIEL and FHIR-style query plans preserve interoperability.</p></div>
+        <div class="card"><h4>Clinical review</h4><p>Every AI-generated clinical artifact remains reviewable and editable by a clinician.</p></div>
+        <div class="card"><h4>Deterministic trust boundary</h4><p>Middleware validates concept IDs, datatypes, retired status, schema structure, reporting plans, and OpenMRS writes.</p></div>
+        <div class="card"><h4>Evidence grounding</h4><p>CDS and patient education search local WHO/MSF evidence rather than answering from model memory.</p></div>
+        <div class="card"><h4>Auditability</h4><p>Tool calls, retrieval steps, drafts, and final outputs are persisted or streamed as traces.</p></div>
+      </div>
+    </section>
+
+    <section id="overview" class="reveal">
+      <h2><span class="num">04</span>System Overview</h2>
+      <div class="h2-rule"></div>
+      <p>At a high level, TenaOS converts natural clinical language into standards-based clinical artifacts.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">High-level flow</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Clinician[Clinician] --> NaturalInput[Natural Language Input]
+  NaturalInput --> TenaAgent[TenaAgent]
+  TenaAgent --> Gemma4E4B[Gemma 4 E4B]
+  TenaAgent --> GuidelineKB[WHO/MSF KB]
+  TenaAgent --> CielKB[CIEL KB]
+  TenaAgent --> DraftStore[Draft Store]
+  DraftStore --> Validators[Deterministic Validators]
+  Validators --> Review[Clinician Review]
+  Review --> OpenMRS[OpenMRS]
+        </pre>
+      </figure>
+      <p>The deployed runtime is a single-container stack. nginx is the only public ingress. TenaAgent, OpenMRS, Qdrant, Gemma, and both KB daemons communicate on container-local ports.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Single-container deployment topology</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart TB
+  Browser[Browser] --> Nginx[Nginx :80]
+  subgraph TenaOSContainer[TenaOS Container]
+    Nginx --> ReactSPA[React SPA]
+    Nginx --> OpenMRS[OpenMRS :8080]
+    Nginx --> TenaAgent[TenaAgent :8095]
+    TenaAgent --> LlamaServer[Llama Server :8001]
+    TenaAgent --> GuidelineDaemon[Guideline KB :4276]
+    TenaAgent --> CielDaemon[CIEL KB :4277]
+    TenaAgent --> OpenMRS
+    GuidelineDaemon --> Qdrant[Qdrant :6333]
+    CielDaemon --> Qdrant
+    CielDaemon --> CIELSQLite[CIEL SQLite]
+    OpenMRS --> MariaDB[MariaDB]
+    LlamaServer --> GemmaWeights[Gemma GGUF + mmproj]
+  end
+        </pre>
+      </figure>
+      <p>The main source-backed components are:</p>
+      <ul>
+        <li><code>TenaOS-Frontend/</code>: React clinical workspace.</li>
+        <li><code>TenaOS-Backend/</code>: OpenMRS Reference Application 3 packaging and metadata contracts.</li>
+        <li><code>TenaAgent/</code>: Python orchestration service for all LLM-mediated workflows.</li>
+        <li><code>TenaOS-LLM/</code>: <code>llama.cpp</code> serving layout for Gemma 4 E4B BF16 GGUF and multimodal projector.</li>
+        <li><code>TenaOS-KnowledgeBase/</code>: Qdrant-backed retrieval daemon for WHO/MSF guidelines and CIEL semantic search.</li>
+        <li><code>TenaOS-CIEL/</code>: CIEL SQLite, FTS5 search, bundle expansion, and Qdrant indexing code.</li>
+        <li><code>scripts/fetch-models.sh</code>: artifact bootstrap for Gemma, EmbedGemma, CIEL SQLite, Qdrant snapshots, and SapBERT.</li>
+        <li><code>docker/restore-qdrant.sh</code>: supervised restore of the <code>who_msf_guidelines</code> and <code>ciel_concepts</code> snapshots.</li>
+      </ul>
+    </section>
+
+    <section id="knowledge" class="reveal">
+      <h2><span class="num">05</span>Knowledge Systems</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS has two local knowledge systems because clinical evidence and clinical terminology serve different roles.</p>
+      <div class="cards">
+        <div class="card"><div class="badge" style="background:linear-gradient(140deg,var(--accent-2),var(--accent))">E</div><h4>WHO/MSF Guideline KB</h4><p>Answers: "What does the evidence or protocol say?" It supports CDS, patient education, and form design.</p></div>
+        <div class="card"><div class="badge" style="background:linear-gradient(140deg,var(--accent-3),var(--accent))">C</div><h4>CIEL Terminology KB</h4><p>Answers: "Which standard concept should represent this clinical idea in OpenMRS?" It supports forms, scribing, reports, and safe persistence.</p></div>
+      </div>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Dual knowledge-base flow</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  UserRequest[Clinical Language] --> TenaAgent[TenaAgent]
+  TenaAgent --> GuidelineKB[WHO/MSF Guideline KB]
+  TenaAgent --> CielKB[CIEL Terminology KB]
+  GuidelineKB --> Evidence[Cited Evidence Chunks]
+  CielKB --> Concepts[Validated Concept Bundles]
+  Evidence --> Draft[Clinical Draft]
+  Concepts --> Draft
+  Draft --> OpenMRS[OpenMRS]
+        </pre>
+      </figure>
+
+      <h3 id="guideline-kb">WHO/MSF Guideline Knowledge Base</h3>
+      <p><strong>Source and extraction.</strong> The WHO/MSF KB is composed of WHO and MSF clinical guidance documents, including clinical practice guidelines, pocket guides, technical reports, rapid advice, consolidated guidance, and MSF protocol-style material. The offline build pipeline lives in <code>/var/www/TenaOS_DeepSeek/kb-pipeline</code>.</p>
+      <p>The extraction begins with Pulse OCR. <code>source/pulse_extract.py</code> uploads PDFs to the Pulse <code>/extract</code> API in asynchronous mode and stores a normalized JSON result for each document, preserving extracted markdown, page count, Pulse extraction ID, bounding boxes with confidence, warnings, footnote references, large-document S3 handling, resume metadata, and a page-budget tracker.</p>
+      <p>The Pulse extraction script tracks a <strong>19,900-page</strong> extraction budget. The current build tree contains <strong>401 chunk JSONL files</strong> and <strong>69,476 guideline chunks</strong>.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Guideline KB build pipeline</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Pdfs[WHO/MSF PDFs] --> Pulse[Pulse OCR Extract]
+  Pulse --> Markdown[Markdown Layout JSON]
+  Markdown --> Docling[Docling JSON]
+  Docling --> Classify[Classify Docs]
+  Classify --> Chunkers[Doc-Type Chunkers]
+  Chunkers --> Enrich[Recommendation Metadata]
+  Enrich --> EmbedGemma[EmbedGemma 768]
+  Enrich --> BM25[BM25 Sparse]
+  EmbedGemma --> QdrantGuidelines[Qdrant WHO/MSF]
+  BM25 --> QdrantGuidelines
+  QdrantGuidelines --> Snapshot[who_msf_guidelines Snapshot]
+        </pre>
+      </figure>
+      <p><strong>Normalization and chunking.</strong> The pipeline converts cleaned markdown into Docling JSON with <code>convert_md.py</code>, classifies documents, fixes heading levels, chunks documents, enriches metadata, post-processes chunks, and backfills metadata. <code>build_kb_guidelines.sh</code> orchestrates that seven-stage build. Chunking is document-type aware, with dedicated chunkers for clinical practice guidelines, pocket guides, technical reports, rapid advice, consolidated guidelines, and MSF protocols. Shared logic in <code>source/chunkers/common.py</code> identifies recommendation signals such as "WHO recommends," "It is recommended that," "Good practice statement," and GRADE certainty symbols, classifying content into types including <code>recommendation</code>, <code>implementation</code>, <code>etd</code>, <code>methods_pico</code>, <code>background</code>, <code>research_gap</code>, <code>annex</code>, and <code>scope</code>.</p>
+      <p>Each chunk stores heading paths, provenance, source URL, document type, disease area, content hash, version date, token count, recommendation number, and retrieval priority. Current or actionable chunks receive higher retrieval priority; superseded chunks can be hard-dropped with priority <code>0.0</code>.</p>
+      <p><strong>Embedding and indexing.</strong> <code>embed_chunks_gpu.py</code> embeds contextualized chunks with EmbedGemma 300M (heading path plus chunk body, dimension 768). Long chunks are split into up to three 10,000-character windows, embedded independently, mean-pooled, and normalized. <code>build_qdrant.py</code> aligns chunk IDs with embeddings, cleans OCR artifacts, filters duplicates, computes BM25 sparse vectors, and writes Qdrant points with dense vector <code>embedgemma</code>, sparse vector <code>bm25</code>, payload indexes, and stable UUID5 point IDs. The resulting <code>who_msf_guidelines.snapshot</code> is about <strong>448.8 MB</strong>.</p>
+      <p><strong>Runtime retrieval.</strong> The runtime daemon in <code>TenaOS-KnowledgeBase/kb_guidelines/daemon.py</code> exposes <code>/health</code>, <code>/stats</code>, and <code>/search</code>, binds locally by default, and can require an <code>X-TenaOS-KB-Secret</code> shared secret.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Hybrid retrieval + clinical reranker</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Query[Clinical Query] --> Expand[Synonym Expansion]
+  Expand --> Dense[EmbedGemma Query]
+  Expand --> Sparse[BM25 Query]
+  Dense --> RRF[Qdrant RRF]
+  Sparse --> RRF
+  RRF --> Rerank[Clinical Reranker]
+  Rerank --> Evidence[Evidence Chunks]
+  Evidence --> Gemma4E4B[Gemma 4 E4B]
+  Gemma4E4B --> CitedOutput[Cited CDS or Material]
+        </pre>
+      </figure>
+      <p>Search modes are <code>lex</code> (BM25 sparse), <code>sem</code> (EmbedGemma dense), and <code>rrf</code> (reciprocal-rank fusion). The reranker performs clinical post-processing: corruption filtering, synonym expansion, action-query detection, content-type boosts, actionability boosts for dose/route/frequency text, domain coherence penalties, source diversity penalties, condition/title exclusions, population/intent reranking, and low-confidence flags.</p>
+
+      <h3 id="ciel-kb">CIEL Terminology Knowledge Base</h3>
+      <p><strong>Source and SQLite build.</strong> CIEL is the terminology layer that makes TenaOS interoperable with OpenMRS. The local SQLite store is built from an OpenConceptLab CIEL export. The checked local artifact is CIEL <code>v2026-03-23</code>. <code>TenaOS-CIEL/ciel_search/pipeline.py</code> streams the export with <code>ijson</code> and writes <code>source_metadata</code>, <code>concept_bundles</code>, <code>concept_mappings</code>, and a <code>concept_search_fts</code> FTS5 index.</p>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" data-count="58687">58,687</div><div class="k">Concepts</div></div>
+        <div class="stat"><div class="v" data-count="3205">3,205</div><div class="k">Retired concepts</div></div>
+        <div class="stat"><div class="v" data-count="298905">298,905</div><div class="k">Mappings</div></div>
+        <div class="stat"><div class="v" data-count="8545">8,545</div><div class="k">Q-and-A edges</div></div>
+        <div class="stat"><div class="v" data-count="3259">3,259</div><div class="k">Concept-set edges</div></div>
+        <div class="stat"><div class="v" data-count="58687">58,687</div><div class="k">Concept bundles with search text</div></div>
+      </div>
+      <p>Each concept bundle preserves the raw concept JSON and stores UUID, display name, class, datatype, retired status, locales, names, descriptions, answers, set members, external mappings, incoming relationships, source version, and generated search text.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">CIEL build &amp; index pipeline</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  OCL[OCL CIEL Export] --> Stream[Streaming Parser]
+  Stream --> SQLite[SQLite Bundles]
+  SQLite --> FTS5[FTS5 Search]
+  SQLite --> SearchText[Search Text]
+  SearchText --> SapBERT[SapBERT Dense]
+  SearchText --> BM25[BM25 Sparse]
+  SapBERT --> QdrantCIEL[Qdrant ciel_concepts]
+  BM25 --> QdrantCIEL
+  QdrantCIEL --> CielSnapshot[ciel_concepts Snapshot]
+        </pre>
+      </figure>
+      <p><strong>Search text and bundle expansion.</strong> Search text is built from preferred names, synonyms, descriptions, answer labels, set-member labels, external source codes, and relationship labels — because a query like "BP," "blood pressure," or "systolic" must still recover usable OpenMRS concepts. SQLite remains the authority for deterministic lookups and bundle expansion, supporting exact search, FTS5 fallback, Q-and-A answer expansion, concept-set member expansion, and form-ready seed discovery.</p>
+      <p><strong>Semantic index.</strong> The semantic index uses SapBERT (<code>cambridgeltl/SapBERT-from-PubMedBERT-fulltext</code>) for dense concept embeddings and the shared BM25 encoder for sparse vectors. <code>ciel_search/qdrant_index.py</code> writes the <code>ciel_concepts</code> collection with dense vector <code>sapbert</code>, sparse vector <code>bm25</code>, and payload fields for concept identity and metadata. The local <code>ciel_concepts.snapshot</code> is about <strong>326.3 MB</strong>.</p>
+      <p><strong>Runtime resolution.</strong> Runtime CIEL discovery is hybrid. <code>kb_guidelines/ciel_retriever.py</code> queries Qdrant with SapBERT and BM25 RRF, returns candidate concept IDs, and hydrates those IDs from SQLite through <code>CielSearchService</code>.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Runtime concept resolution &amp; validation</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Phrase[Clinical Phrase] --> HybridSearch[SapBERT + BM25 RRF]
+  HybridSearch --> CandidateIds[Candidate Concept IDs]
+  CandidateIds --> Hydrate[SQLite Hydration]
+  Hydrate --> Inspect[Concept Bundle Inspect]
+  Inspect --> Validate[Class / Datatype / Retired Checks]
+  Validate --> Commit[Draft Field]
+  Validate --> Reject[Reject or Ask Review]
+        </pre>
+      </figure>
+      <p>The runtime never trusts vector search alone. Final decisions use hydrated concept bundles and middleware checks: class, datatype, retired status, duplicate concepts, answer availability, set membership, and OpenMRS UUID compatibility.</p>
+    </section>
+
+    <section id="features" class="reveal">
+      <h2><span class="num">06</span>Feature Architecture</h2>
+      <div class="h2-rule"></div>
+
+      <h3 id="form-builder">Natural-Language Form Builder</h3>
+      <p>The form builder is the most mature workflow and the primary GEPA optimization target. The production pipeline is implemented in <code>TenaAgent/service/tena_agent_service/form_pipeline/runner.py</code>:</p>
+      <ol class="steps">
+        <li>Research the request against the WHO/MSF KB.</li>
+        <li>Produce a structured question worklist.</li>
+        <li>Resolve worklist items against CIEL.</li>
+        <li>Commit fields into a draft basket.</li>
+        <li>Run a bounded coverage-repair pass.</li>
+        <li>Build an OpenMRS schema.</li>
+        <li>Produce a deterministic summary for clinician review.</li>
+        <li>Publish only after approval.</li>
+      </ol>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Form builder pipeline</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Request[Form Request] --> Research[WHO/MSF Research]
+  Research --> Worklist[Question Worklist]
+  Worklist --> Resolve[CIEL Resolution]
+  Resolve --> Basket[Draft Basket]
+  Basket --> Repair[Coverage Repair]
+  Repair --> Schema[OpenMRS Schema Build]
+  Schema --> Review[Clinician Review]
+  Review --> Publish[OpenMRS Publish]
+        </pre>
+      </figure>
+      <p>OpenMRS form publication is handled by <code>openmrs_writer.py</code>. Publishing is a three-step REST operation: create Form metadata, upload the JSON schema as ClobData, and bind the schema as a form resource. If a later step fails, the created form is retired so only usable forms appear in the form list.</p>
+
+      <h3 id="scribe">SOAP Scribe</h3>
+      <p>The scribe accepts text or voice. Text and trace routes are implemented in <code>routes/scribe_routes.py</code>; the tool loop is in <code>scribe_tool_loop.py</code>. For voice input, the route accepts multipart audio, converts it to 16 kHz mono WAV with <code>ffmpeg</code>, base64-encodes it, and sends it to Gemma using an audio content block. For Amharic text, the route can translate the note to English before SOAP extraction.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Scribe workflow</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Note[Text or Voice Note] --> SOAP[SOAP Extraction]
+  SOAP --> Search[CIEL Search]
+  Search --> Inspect[Concept Inspection]
+  Inspect --> Structured[Structured Findings]
+  Structured --> Review[Clinician Review]
+  Review --> Encounter[OpenMRS Encounter]
+        </pre>
+      </figure>
+      <p>The model extracts SOAP sections, coded concepts, observations, and medications. The backend validates and resolves CIEL IDs before review. Unresolved items are carried forward for clinician review rather than silently written.</p>
+
+      <h3 id="cds">Clinical Decision Support</h3>
+      <p>CDS is implemented as an agentic KB loop in <code>tool_loop.py</code>. Gemma has two tools — <code>search_guidelines</code> (query the local WHO/MSF KB) and <code>format_cds_result</code> (emit the final structured CDS card). The loop encourages multiple searches: main condition, treatment, dosing, contraindications, monitoring, and referral. Results return as tool observations so Gemma can issue follow-up queries.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Agentic CDS loop</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Patient[OpenMRS Patient Context] --> Gemma4E4B[Gemma 4 E4B]
+  Gemma4E4B --> Search[Search Guidelines]
+  Search --> Evidence[Retrieved Evidence]
+  Evidence --> Followup[Follow-up Queries]
+  Followup --> Finalize[Format CDS]
+  Finalize --> CitedCard[Cited CDS Card]
+  CitedCard --> Review[Clinician Use]
+        </pre>
+      </figure>
+      <p>The safety posture is retrieval-grounded, clinician-reviewed decision support. Unsupported recommendations are blocked by retrieval grounding, abstention behavior, and clinician review.</p>
+
+      <h3 id="education">Patient Education</h3>
+      <p>Patient education uses the same evidence-grounded pattern as CDS but with different output goals. <code>material_loop.py</code> asks Gemma to gather guideline evidence and produce a seven-section patient-facing document: what you have, why it matters, what to do, your medications, what to avoid, follow-up schedule, and when to seek help.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Patient education flow</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  PatientContext[Patient Context] --> Search[Guideline Search]
+  Search --> Evidence[Evidence Chunks]
+  Evidence --> Draft[Seven-Section Material]
+  Draft --> Translate[Optional Translation]
+  Draft --> Edit[Clinician Edit]
+  Edit --> Print[Print or Share]
+        </pre>
+      </figure>
+      <p>The difference from CDS is audience and tone. CDS speaks to clinicians; patient education translates the same evidence-grounded approach into actionable language for patients.</p>
+
+      <h3 id="reporting">Plain-Language Reporting</h3>
+      <p>The report builder is intentionally split between model planning and deterministic execution. The model mutates a small <code>ReportSpec</code>; <code>report_builder.py</code> compiles that spec into a <code>QueryPlan</code>. The agent never emits raw FHIR URLs. The compiler resolves natural-language date phrases, validates all CIEL concepts locally, chooses filter modes from CIEL datatypes, emits FHIR Observation/Patient/Encounter search descriptors, and defines post-processing such as intersect, union, divide, or group-by.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Reporting: planning vs. deterministic execution</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Question[Plain-Language Question] --> Spec[ReportSpec Draft]
+  Spec --> CIEL[CIEL Concept Filters]
+  CIEL --> Compiler[Deterministic Compiler]
+  Compiler --> FHIRPlan[FHIR Query Plan]
+  FHIRPlan --> OpenMRSFHIR[OpenMRS FHIR2]
+  OpenMRSFHIR --> Results[Counts / Cohorts / Indicators]
+  Results --> Visualization[Report Visualization]
+        </pre>
+      </figure>
+      <p><code>openmrs_reader.py</code> performs the FHIR2 reads and datatype-specific filtering. Boolean observations are filtered client-side by <code>valueBoolean</code>, coded observations use <code>value-concept</code> with fallback, and numeric observations are filtered client-side because <code>value-quantity</code> is unreliable across OpenMRS FHIR2 builds.</p>
+    </section>
+
+    <section id="gepa" class="reveal">
+      <h2><span class="num">07</span>GEPA Optimization</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS uses GEPA as the first adaptation layer because many failures in clinical-informatics agents are instruction and tool-use failures, not missing model weights. GEPA can optimize the prompts that tell Gemma how to search, inspect, reject, and commit concepts before any LoRA training is attempted.</p>
+      <p>The GEPA runner is offline. <code>scripts/optimization/run_form_gepa.py</code> configures a task model (local Gemma 4 E4B endpoint), a reflection model (DeepSeek-R1 on Vertex), a dataset of clinician-graded form prompts with <code>requireAnyOf</code> concept clusters, and a deterministic metric combining CIEL-expanded coverage with schema validity and size constraints.</p>
+      <div class="safety-note"><b>Train equals serve.</b> <code>form_pipeline_dspy.py</code> does not build a toy surrogate. It wraps the real <code>run_form_pipeline_agent</code> and uses <code>prompt_overlay()</code> to evaluate candidate prompts inside the actual production pipeline.</div>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">GEPA optimization loop</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  SeedPrompts[Seed Prompts] --> Overlay[Prompt Overlay]
+  Overlay --> RealPipeline[Real Pipeline]
+  RealPipeline --> Metric[CIEL Coverage Metric]
+  Metric --> Feedback[Text Feedback]
+  Feedback --> ReflectionLM[DeepSeek-R1 Reflection]
+  ReflectionLM --> CandidatePrompts[Candidate Prompts]
+  CandidatePrompts --> Overlay
+  CandidatePrompts --> Export[Optimized Prompts]
+  Export --> RuntimeFlag[TENAOS_USE_OPTIMIZED_PROMPTS]
+        </pre>
+      </figure>
+      <p>The optimized prompts are exported into <code>prompts/optimized/</code>. Runtime activation is explicit through <code>TENAOS_USE_OPTIMIZED_PROMPTS=1</code>. Base prompts remain SHA-256 hash pinned, so unintentional prompt drift is caught.</p>
+      <p>The GEPA score is normalized to a 0–1 range. A score of 1.0 means full CIEL-expanded cluster coverage with a valid schema and acceptable field count. The reported <strong>0.246</strong> form score comes from a small CIEL-focused optimization subset where the goal was to improve concept selection under difficult terminology conditions; it is best read as evidence for the optimization loop rather than a broad product-quality score.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run</th><th>Result</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Baseline form-builder eval</td><td>147/147 completed · 0 failures · 0.465 mean recall · 0.993 schema-valid · 17.97 s median</td><td>System-level form evaluation</td></tr>
+            <tr><td>Historical form CIEL GEPA</td><td>Best validation score 0.246</td><td>Small CIEL-focused dev subset</td></tr>
+            <tr><td>Historical report GEPA</td><td>Best validation score 0.492</td><td>Small report GEPA subset</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>These are reported as completed internal technical evaluation results for the submitted system.</p>
+    </section>
+
+    <section id="lora" class="reveal">
+      <h2><span class="num">08</span>LoRA Fine-Tuning</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS ships a single task-tagged LoRA adapter trained over clinical-informatics behaviours and routed at inference by task tags such as <code>[form]</code>, <code>[report]</code>, <code>[scribe]</code>, <code>[scribe-am]</code>, <code>[cds]</code>, and <code>[edu]</code>. The sibling <code>/var/www/LORA_TenaOS</code> repository generates, validates, normalizes, and trains the adapter corpus.</p>
+      <div class="stat-grid">
+        <div class="stat"><div class="v" data-count="16005">16,005</div><div class="k">Validated task-tagged traces</div></div>
+        <div class="stat"><div class="v" data-count="7086">7,086</div><div class="k">Training optimization steps</div></div>
+        <div class="stat"><div class="v">r=16</div><div class="k">LoRA rank, alpha 32</div></div>
+      </div>
+      <p>The adapter was trained as a BF16 LoRA over the text decoder. The SFT split contains 18,909 training conversations, 1,071 validation conversations, and 1,109 held-out test conversations. Records are real multi-turn ShareGPT-style conversations reconstructed from production event traces where available, and training masks loss to assistant turns only.</p>
+      <figure class="diagram">
+        <div class="diagram-head"><span class="dh-title">Trace generation &amp; validation</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <pre class="mermaid">
+flowchart LR
+  Requests[Generated Requests] --> TeacherTraces[Teacher Traces]
+  RuntimeTraces[Runtime Traces] --> TraceStore[Trace Store]
+  TeacherTraces --> Validators[Trace Validators]
+  TraceStore --> Validators
+  Validators --> SFTRecords[Training-Ready Records]
+  SFTRecords --> TrainingSet[Training Set]
+  TrainingSet --> ReleasePackage[Adaptation Data Package]
+        </pre>
+      </figure>
+      <p>Training used rank 16, alpha 32, dropout 0.0, maximum sequence length 24,576, batch size 1 with 8-step gradient accumulation, and 3 epochs. Runtime was 70.5 hours on an A100 80GB, and the final recorded train loss was 0.04123. Workflow-level LoRA performance claims require a separate full-runtime evaluation.</p>
+    </section>
+
+    <section id="evaluation" class="reveal">
+      <h2><span class="num">09</span>Evaluation Methodology</h2>
+      <div class="h2-rule"></div>
+      <p>The evaluation protocol is detailed in <code>docs/evaluation/evaluation-protocol.md</code>. The core principle is to separate technical evaluation from clinical validation. The completed technical evaluation package is summarized below.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Workflow</th><th>Key metrics</th><th>Completed evidence</th></tr></thead>
+          <tbody>
+            <tr><td>Form builder &amp; GEPA</td><td>CIEL-expanded recall, exact recall, schema-valid rate, size-ok rate, hallucinated-code rate, retired-code rate, tool calls, latency, publish readiness</td><td>147/147 prompts completed, 0 failures, 0.465 mean concept-cluster recall, 0.993 schema-valid rate, 17.97 s median latency</td></tr>
+            <tr><td>WHO/MSF retrieval</td><td>Retrieval scale, local indexing, hybrid retrieval, reranker design, citation grounding</td><td>69,476 guideline chunks indexed with EmbedGemma dense + BM25 sparse vectors; 448.8 MB Qdrant snapshot</td></tr>
+            <tr><td>CIEL retrieval &amp; validation</td><td>Concept coverage, mapping coverage, retired handling, bundle hydration, concept identity</td><td>58,687 concepts, 298,905 mappings, 8,545 Q&amp;A edges, 3,259 concept-set edges, 58,687 hydrated bundles</td></tr>
+            <tr><td>Scribe</td><td>Text/voice input, SOAP extraction, CIEL resolution, unresolved-item handling, confirmation</td><td>Text, voice, and Amharic trace corpus included in LoRA training; workflow extraction and WER evaluation remain separate</td></tr>
+            <tr><td>Report builder</td><td>Report spec grammar, CIEL filter validation, datatype-specific FHIR compilation, deterministic boundary</td><td>Compiler implemented with Boolean, coded, numeric, condition, and any-value filter modes</td></tr>
+            <tr><td>CDS &amp; patient education</td><td>WHO/MSF retrieval, cited output, abstention posture, clinician review</td><td>Agentic guideline search and cited output workflows implemented over local KB</td></tr>
+            <tr><td>Deployment</td><td>Local artifact footprint, model serving, Qdrant restore, single-container operation</td><td>Single-container Docker Compose runtime; artifact bootstrap + Qdrant restore documented; Gemma GGUF + mmproj, 448.8 MB and 326.3 MB snapshots</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="safety" class="reveal">
+      <h2><span class="num">10</span>Responsible AI &amp; Safety</h2>
+      <div class="h2-rule"></div>
+      <p>TenaOS is built around layered controls:</p>
+      <div class="cards">
+        <div class="card"><h4>Local data boundary</h4><p>OpenMRS, model inference, CIEL, Qdrant, and trace stores run locally.</p></div>
+        <div class="card"><h4>Allow-listed tools</h4><p>Gemma uses only exposed, allow-listed tools.</p></div>
+        <div class="card"><h4>Retrieval grounding</h4><p>CDS and patient education use retrieved WHO/MSF evidence.</p></div>
+        <div class="card"><h4>Terminology validation</h4><p>Final clinical records use CIEL bundles and OpenMRS concept IDs.</p></div>
+        <div class="card"><h4>Deterministic middleware</h4><p>Schema builds, report plans, concept filters, and writes are compiled and checked outside the model.</p></div>
+        <div class="card"><h4>Human review</h4><p>Forms, scribe outputs, patient materials, and recommendations are reviewable before use.</p></div>
+        <div class="card"><h4>Audit traces</h4><p>Workflows persist or stream tool calls, retrieval results, and draft evolution.</p></div>
+      </div>
+      <p>The system card in <code>docs/system-card.md</code> documents intended use, users, outputs, contraindicated uses, risks, mitigations, and monitoring.</p>
+    </section>
+
+    <section id="governance" class="reveal">
+      <h2><span class="num">11</span>Clinical Governance Boundary</h2>
+      <div class="h2-rule"></div>
+      <div class="safety-note"><b>Governance invariant.</b> TenaOS produces evidence-grounded, standards-based drafts that pass through deterministic validation and clinician review before clinical persistence. The completed evidence package includes implementation evidence, local corpus and index measurements, deterministic validation design, and internal technical evaluation runs.</div>
+    </section>
+
+    <section id="repro" class="reveal">
+      <h2><span class="num">12</span>Reproducibility</h2>
+      <div class="h2-rule"></div>
+      <p>Important entry points:</p>
+      <ul>
+        <li>Runtime setup: <code>README.md</code>, <code>scripts/setup-demo.sh</code>, <code>scripts/fetch-models.sh</code>.</li>
+        <li>Agent workflows: <code>TenaAgent/README.md</code>, <code>TenaAgent/service/tena_agent_service/</code>.</li>
+        <li>WHO/MSF KB runtime: <code>TenaOS-KnowledgeBase/</code>.</li>
+        <li>WHO/MSF KB build: <code>/var/www/TenaOS_DeepSeek/kb-pipeline/</code>.</li>
+        <li>CIEL build/runtime: <code>TenaOS-CIEL/</code>.</li>
+        <li>GEPA optimization: <code>scripts/optimization/</code>.</li>
+        <li>Evaluation protocol: <code>docs/evaluation/evaluation-protocol.md</code>.</li>
+        <li>Evidence ledger: <code>docs/evaluation/evidence-ledger.md</code>.</li>
+        <li>Diagrams: <code>docs/technical-report-assets/architecture-diagrams.md</code>.</li>
+      </ul>
+    </section>
+
+    <section id="references" class="reveal">
+      <h2><span class="num">13</span>References</h2>
+      <div class="h2-rule"></div>
+      <div class="cards">
+        <div class="card"><h4>OpenMRS</h4><p>Open-source medical record system.</p></div>
+        <div class="card"><h4>CIEL</h4><p>Columbia International eHealth Laboratory concept dictionary.</p></div>
+        <div class="card"><h4>FHIR R4</h4><p>Reporting read interface through OpenMRS FHIR2.</p></div>
+        <div class="card"><h4>WHO &amp; MSF guidance</h4><p>Local guideline evidence corpus.</p></div>
+        <div class="card"><h4>Gemma 4 E4B</h4><p>Local multimodal generation model.</p></div>
+        <div class="card"><h4>EmbedGemma 300M</h4><p>Dense retrieval model for guideline chunks.</p></div>
+        <div class="card"><h4>SapBERT</h4><p>Dense biomedical concept encoder for CIEL semantic search.</p></div>
+        <div class="card"><h4>Qdrant</h4><p>Local vector database for dense and sparse retrieval.</p></div>
+        <div class="card"><h4>GEPA / DSPy</h4><p>Offline prompt optimization framework.</p></div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="f-grid">
+        <div><strong style="color:var(--text)">TenaOS Technical Report</strong> · Local-first clinical AI operating system.</div>
+        <div>Gemma proposes · middleware verifies · clinicians approve · OpenMRS persists.</div>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<button class="back-top" id="backTop" title="Back to top">
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+</button>
+
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+
+  const themes = {
+    dark: {
+      theme: "base",
+      themeVariables: {
+        background: "#141b2c", primaryColor: "#18233b", primaryTextColor: "#e6ecf7",
+        primaryBorderColor: "#4f9cf9", lineColor: "#6b7c9c", secondaryColor: "#1c2740",
+        tertiaryColor: "#101728", fontFamily: "Inter, sans-serif", fontSize: "14px",
+        clusterBkg: "#101728", clusterBorder: "#243049", edgeLabelBackground: "#141b2c",
+      },
+    },
+    light: {
+      theme: "base",
+      themeVariables: {
+        background: "#ffffff", primaryColor: "#eef3fc", primaryTextColor: "#15233b",
+        primaryBorderColor: "#2563eb", lineColor: "#8595b0", secondaryColor: "#f1f5fb",
+        tertiaryColor: "#f6f8fc", fontFamily: "Inter, sans-serif", fontSize: "14px",
+        clusterBkg: "#f6f8fc", clusterBorder: "#e2e8f4", edgeLabelBackground: "#ffffff",
+      },
+    },
+  };
+
+  const sources = [...document.querySelectorAll(".mermaid")].map((el) => el.textContent);
+
+  async function renderMermaid(mode) {
+    const conf = themes[mode];
+    mermaid.initialize({ startOnLoad: false, securityLevel: "loose", flowchart: { curve: "basis", htmlLabels: true, useMaxWidth: true }, ...conf });
+    const nodes = [...document.querySelectorAll(".mermaid")];
+    for (let i = 0; i < nodes.length; i++) {
+      const id = "mmd-" + i + "-" + Math.random().toString(36).slice(2, 7);
+      try {
+        const { svg } = await mermaid.render(id, sources[i]);
+        nodes[i].innerHTML = svg;
+      } catch (e) { nodes[i].textContent = sources[i]; }
+    }
+  }
+
+  // theme handling
+  const root = document.documentElement;
+  const themeBtn = document.getElementById("themeBtn");
+  const themeLabel = document.getElementById("themeLabel");
+  function applyTheme(mode) {
+    root.setAttribute("data-theme", mode);
+    themeLabel.textContent = mode === "dark" ? "Light" : "Dark";
+    localStorage.setItem("tenaos-theme", mode);
+    renderMermaid(mode);
+  }
+  const saved = localStorage.getItem("tenaos-theme") || "dark";
+  applyTheme(saved);
+  themeBtn.addEventListener("click", () => applyTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark"));
+
+  document.getElementById("printBtn").addEventListener("click", () => window.print());
+
+  // progress bar + back-to-top
+  const progress = document.getElementById("progress");
+  const backTop = document.getElementById("backTop");
+  function onScroll() {
+    const h = document.documentElement;
+    const scrolled = (h.scrollTop) / (h.scrollHeight - h.clientHeight);
+    progress.style.width = (scrolled * 100) + "%";
+    backTop.classList.toggle("show", h.scrollTop > 600);
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  backTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+  // scroll-spy TOC
+  const tocLinks = [...document.querySelectorAll("#toc a")];
+  const idMap = new Map(tocLinks.map((a) => [a.getAttribute("href").slice(1), a]));
+  const targets = [...idMap.keys()].map((id) => document.getElementById(id)).filter(Boolean);
+  const spy = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        tocLinks.forEach((a) => a.classList.remove("active"));
+        const link = idMap.get(e.target.id);
+        if (link) { link.classList.add("active"); link.scrollIntoView({ block: "nearest" }); }
+      }
+    });
+  }, { rootMargin: "-15% 0px -75% 0px", threshold: 0 });
+  targets.forEach((t) => spy.observe(t));
+
+  // reveal on scroll
+  const revealer = new IntersectionObserver((entries) => {
+    entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); revealer.unobserve(e.target); } });
+  }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+  document.querySelectorAll(".reveal").forEach((el) => revealer.observe(el));
+
+  // count-up animation for stats
+  const fmt = (n) => n.toLocaleString("en-US");
+  const counter = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      const el = e.target; const target = parseInt(el.dataset.count, 10);
+      if (isNaN(target)) { counter.unobserve(el); return; }
+      const suffix = el.textContent.includes("/147") ? "/147" : "";
+      let start = 0; const dur = 1100; const t0 = performance.now();
+      function tick(now) {
+        const p = Math.min((now - t0) / dur, 1);
+        const eased = 1 - Math.pow(1 - p, 3);
+        el.textContent = fmt(Math.round(target * eased)) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+      counter.unobserve(el);
+    });
+  }, { threshold: 0.4 });
+  document.querySelectorAll(".stat .v[data-count]").forEach((el) => counter.observe(el));
+
+  onScroll();
+</script>
+</body>
+</html>
