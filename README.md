@@ -28,18 +28,6 @@ deployed as a single Docker image.
 
 </div>
 
-> **Temporary notice:** the published task-tagged LoRA adapter is
-> currently being retrained to fix a data/production parity gap. Until
-> the new adapter is validated and republished, `scripts/fetch-models.sh`
-> downloads and `docker/start-llama.sh` serves the **plain base
-> Gemma 4 E4B model** rather than the merged-LoRA build described
-> throughout this README. Task-tag routing (`[form]`, `[report]`,
-> `[scribe]`, `[cds]`, `[edu]`) is inactive on this build; everything
-> else (OpenMRS, CIEL, KB retrieval, agent loops) is unaffected. See
-> [`models/README.md`](models/README.md) for details.
-
----
-
 TenaOS turns natural language into standards-based clinical workflows.
 A clinical officer describes what they need; the agent searches CIEL and
 the WHO/MSF knowledge base, drafts the artifact, validates it through
@@ -409,7 +397,7 @@ Optimized prompts are SHA-256 hash-pinned at the base so unintentional drift is 
 ```mermaid
 flowchart LR
     SeedPrompts["Seed Prompts"] --> PromptOverlay["Prompt Overlay"]
-    PromptOverlay --> RealPipeline["Real v2 Pipeline"]
+    PromptOverlay --> RealPipeline["Real Pipeline"]
     RealPipeline --> CIELMetric["CIEL Metric"]
     CIELMetric --> ReflectionLM["Reflection LM"]
     ReflectionLM --> CandidatePrompts["Candidate Prompts"]
@@ -417,21 +405,21 @@ flowchart LR
     CandidatePrompts --> OptimizedPrompts["Optimized Prompts"]
 ```
 
-| Metric | Seed | GEPA | +LoRA target |
-|---|---|---|---|
-| Form CIEL coverage score | 0.118 | 0.246 | 0.341 |
-| Report coverage score | 0.274 | 0.492 | 0.611 |
-| Form concept recall | 0.465 | 0.580 | 0.710 |
-| Schema-valid rate | 0.993 | 0.997 | 0.999 |
-| Hallucinated / retired-code rate | 3.1% | 1.2% | 0.4% |
+| Metric | Seed | GEPA |
+|---|---|---|
+| Form CIEL coverage score | 0.118 | 0.246 |
+| Report coverage score | 0.274 | 0.492 |
+| Form concept recall | 0.465 | 0.580 |
+| Schema-valid rate | 0.993 | 0.997 |
+| Hallucinated / retired-code rate | 3.1% | 1.2% |
 
-Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma; +LoRA target = optimized prompt + merged adapter target from the prior evidence package. The completed QLoRA adapter is evaluated on held-out workflow suites after merge before these target values are presented as final system outcomes.
+Seed = base prompt + base Gemma 4 E4B; GEPA = optimized prompt + base Gemma. These prompt-optimization metrics are not LoRA performance claims.
 
 ---
 
 ## LoRA Fine-Tuning
 
-TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter is merged into the F16 edge-tier weights and is normally what every TenaOS deployment serves by default (`tenaos-gemma-4-E4B-it-lora-F16.gguf`, not the plain base model); workflow-level quality metrics are evaluated separately after adapter merge. **The adapter is currently being retrained (see the temporary notice above) — deployments built from this commit serve the plain base model until the new adapter is republished.**
+TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-informatics behaviors and routed at inference by a task tag, so one set of weights covers form building, reporting, multilingual scribing, decision support, and patient education. The adapter is merged into the F16 edge-tier weights and is normally what every TenaOS deployment serves by default (`tenaos-gemma-4-E4B-it-lora-F16.gguf`, not the plain base model). Workflow-level quality metrics are evaluated separately in the full runtime.
 
 **Training corpus:** 16,005 validated traces across seven task families.
 
@@ -446,9 +434,9 @@ TenaOS ships a **single task-tagged LoRA adapter** trained across all clinical-i
 | Patient education | 3,814 | `[edu]` |
 | **Total** | **16,005** | one adapter |
 
-Configuration: 4-bit QLoRA, rank 16, alpha 32, dropout 0.05, adapters on language attention and MLP projections, 4,096-token sequence length, and 3 epochs over the validated corpus. The run completed 5,379 steps in 29.5 hours on an A100 80GB, with final train loss 0.0509 and final eval loss 1.1946. Validation rejects PHI-like samples, retired concepts, wrong datatypes, duplicate CIEL codes, and records outside training-readiness criteria; only clean, standards-correct trajectories reach the adapter.
+Configuration: BF16 LoRA over the text decoder, rank 16, alpha 32, dropout 0.0, adapters on language attention and MLP projections, 24,576-token sequence length, and 3 epochs over the validated corpus. The run completed 7,086 steps in 70.5 hours on an A100 80GB, with final train loss 0.04123. Validation rejects PHI-like samples, retired concepts, wrong datatypes, duplicate CIEL codes, and records outside training-readiness criteria; only clean, standards-correct trajectories reach the adapter.
 
-Published training artifacts include the corpus-counts table, training-runtime chart, training-loss chart, eval-loss-by-checkpoint chart, checkpoint-metrics table, adapter metadata, and merged model artifacts. The corpus-funnel and task-mix charts are retained as internal audit assets and are not embedded in the public README.
+Published training artifacts include the training-runtime chart, training-loss chart, adapter metadata, and merged model artifacts.
 
 ---
 
@@ -458,12 +446,12 @@ The evaluation separates technical verification from clinical validation. Result
 
 | Workflow | Key metrics | Completed evidence |
 |---|---|---|
-| Form builder and GEPA | CIEL-expanded recall, schema-valid rate, hallucinated/retired-code rate, latency | GEPA eval package complete; post-adapter workflow evaluation follows adapter merge |
+| Form builder and GEPA | CIEL-expanded recall, schema-valid rate, hallucinated/retired-code rate, latency | GEPA prompt-optimization package complete; LoRA workflow evaluation remains separate |
 | WHO/MSF retrieval | Retrieval scale, hybrid retrieval, citation grounding | 69,476 chunks (EmbedGemma + BM25); 448.8 MB Qdrant snapshot |
 | CIEL retrieval and validation | Concept/mapping coverage, retired handling, bundle hydration | 58,687 concepts, 298,905 mappings, 8,545 Q&A edges, 3,259 set edges |
-| Scribe | SOAP completeness, concept F1, ASR WER, unresolved handling | 0.88 concept F1, 0.95 SOAP completeness; ASR WER 6.5% (en) / 13.8% (am) |
-| Report builder | Query-plan correctness, count accuracy, compile success | 0.90 plan correctness, 0.88 count accuracy, 0.99 compile success |
-| CDS and patient education | Citation grounding, unsupported-rec rate, dose safety | 0.94 cited, 1.6% unsupported, 99.5% no-invented-dose |
+| Scribe | SOAP completeness, concept F1, ASR WER, unresolved handling | Text, voice, and Amharic trace corpus included in LoRA training; workflow extraction and WER evaluation remain separate |
+| Report builder | Query-plan correctness, count accuracy, compile success | Deterministic compiler implemented with Boolean, coded, numeric, condition, and any-value filter modes |
+| CDS and patient education | Citation grounding, unsupported-rec rate, dose safety | Agentic guideline search and cited-output workflows implemented over the local WHO/MSF KB; full workflow evaluation remains separate |
 
 ---
 
