@@ -450,7 +450,7 @@ These are reported as completed internal technical evaluation results for the su
 
 TenaOS ships a single task-tagged LoRA adapter that serves every workflow. Rather than maintaining one model per feature, the adapter is trained multi-task over clinical-informatics behaviours and routed at inference by task tags such as `[form]`, `[report]`, `[scribe]`, `[scribe-am]`, `[cds]`, and `[edu]`.
 
-The sibling `/var/www/LORA_TenaOS` repository generates, validates, normalizes, and trains the adapter corpus:
+The submitted Hugging Face artifact repository provides the synthetic SFT corpus under [`training_corpus/`](https://huggingface.co/beza4588/TenaOS/tree/main/training_corpus) and the training, merge, conversion, and evaluation scripts under [`training_code/`](https://huggingface.co/beza4588/TenaOS/tree/main/training_code):
 
 - 16,005 validated task-tagged traces,
 - 18,909 training conversations,

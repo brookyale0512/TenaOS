@@ -29,7 +29,7 @@ This ledger separates the implemented, measured, and internal technical evaluati
 | Baseline form-builder evaluation completed 147/147 prompts with 0 failures, mean recall 0.465, schema-valid rate 0.993, median latency 17.97 s. | Internal technical evaluation | `/var/www/TenaOS_DeepSeek/evals/form_builder/baselines/2026-05-pre-sota/prompts_corpus_v4/20260523T013013Z/summary.json` |
 | Form CIEL GEPA historical run reached best validation score 0.246 on a small dev subset. | Internal technical evaluation | `/var/www/TenaOS_DeepSeek/phase1_ciel_gepa/gepa/runs_v2/phase_a_v2_fix_20260526T1635Z/summary.json` |
 | Report GEPA historical run reached best validation score 0.492 on a small report GEPA subset. | Internal technical evaluation | `/var/www/TenaOS_DeepSeek/phase1_ciel_gepa/gepa/runs_report_v1/phase_b_report_v1_20260526T2011Z/summary.json` |
-| LoRA/SFT corpus includes 16,005 validated task-tagged traces and a 18,909 / 1,071 / 1,109 train-validation-test split. | Measured | `/var/www/LORA_TenaOS/lora_training/artifacts_v2/`, `/var/www/LORA_TenaOS/lora_training/runs/20260703T061340Z/adapter/training_metadata.json` |
+| LoRA/SFT corpus includes 16,005 validated task-tagged traces and a 18,909 / 1,071 / 1,109 train-validation-test split. | Measured | Submitted Hugging Face artifacts: [`training_corpus/`](https://huggingface.co/beza4588/TenaOS/tree/main/training_corpus), [`adapter/training_metadata.json`](https://huggingface.co/beza4588/TenaOS/blob/main/adapter/training_metadata.json) |
 
 ## Scope Boundaries
 

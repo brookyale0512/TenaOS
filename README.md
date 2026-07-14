@@ -484,7 +484,7 @@ TenaOS is a clinical decision support tool, not a diagnostic authority. All clin
 - WHO/MSF KB runtime: `TenaOS-KnowledgeBase/`; offline build: `kb-pipeline/` build tree.
 - CIEL build and runtime: `TenaOS-CIEL/`.
 - GEPA optimization: `scripts/optimization/`.
-- LoRA corpus and adapter training: [`/var/www/LORA_TenaOS`](https://github.com/brookyale0512/LORA_TenaOS).
+- LoRA corpus and adapter training: [`training_corpus/`](https://huggingface.co/beza4588/TenaOS/tree/main/training_corpus) and [`training_code/`](https://huggingface.co/beza4588/TenaOS/tree/main/training_code) in the submitted Hugging Face artifact repo.
 
 ---
 

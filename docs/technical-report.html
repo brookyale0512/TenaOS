@@ -716,7 +716,7 @@ flowchart LR
     <section id="lora" class="reveal">
       <h2><span class="num">08</span>LoRA Fine-Tuning</h2>
       <div class="h2-rule"></div>
-      <p>TenaOS ships a single task-tagged LoRA adapter trained over clinical-informatics behaviours and routed at inference by task tags such as <code>[form]</code>, <code>[report]</code>, <code>[scribe]</code>, <code>[scribe-am]</code>, <code>[cds]</code>, and <code>[edu]</code>. The sibling <code>/var/www/LORA_TenaOS</code> repository generates, validates, normalizes, and trains the adapter corpus.</p>
+      <p>TenaOS ships a single task-tagged LoRA adapter trained over clinical-informatics behaviours and routed at inference by task tags such as <code>[form]</code>, <code>[report]</code>, <code>[scribe]</code>, <code>[scribe-am]</code>, <code>[cds]</code>, and <code>[edu]</code>. The submitted Hugging Face artifact repository provides the synthetic SFT corpus under <a href="https://huggingface.co/beza4588/TenaOS/tree/main/training_corpus"><code>training_corpus/</code></a> and the training, merge, conversion, and evaluation scripts under <a href="https://huggingface.co/beza4588/TenaOS/tree/main/training_code"><code>training_code/</code></a>.</p>
       <div class="stat-grid">
         <div class="stat"><div class="v" data-count="16005">16,005</div><div class="k">Validated task-tagged traces</div></div>
         <div class="stat"><div class="v" data-count="7086">7,086</div><div class="k">Training optimization steps</div></div>
