@@ -57,19 +57,37 @@ export OPENMRS_SERVICE_USER="${OPENMRS_SERVICE_USER:-admin}"
 export OPENMRS_SERVICE_PASSWORD="${OPENMRS_SERVICE_PASSWORD:-$OPENMRS_ADMIN_PASSWORD}"
 
 # ── Verify GGUF weights are mounted ──────────────────────────────────────
-# TEMPORARY: the published LoRA adapter is being retrained to fix a data/
-# production parity gap (see TenaOS repo history), so this build serves the
-# plain base Gemma 4 E4B GGUF instead of the merged LoRA build until the new
-# adapter is validated and republished. Revert to
-# tenaos-gemma-4-E4B-it-lora-F16.gguf (see https://huggingface.co/beza4588/TenaOS)
-# once that lands.
-if [ ! -f /models/gemma-4-E4B-it-BF16.gguf ]; then
-  log "ERROR: /models/gemma-4-E4B-it-BF16.gguf not found."
-  log "Bind-mount your host models directory at /models, e.g.:"
-  log "  -v \$(pwd)/models:/models:ro"
-  exit 1
+# TenaOS always serves the merged Gemma 4 E4B + task-tagged LoRA GGUF, not
+# the plain base model (see https://huggingface.co/beza4588/TenaOS). When
+# TENAOS_LLM_BACKEND points TenaAgent at a remote endpoint instead (e.g.
+# Vertex AI), the local weights are not needed and start-llama.sh already
+# skips loading them, so skip this hard requirement too.
+if [ "${TENAOS_LLM_BACKEND:-local}" = "local" ]; then
+  if [ ! -f /models/tenaos-gemma-4-E4B-it-lora-F16.gguf ]; then
+    log "ERROR: /models/tenaos-gemma-4-E4B-it-lora-F16.gguf not found."
+    log "Bind-mount your host models directory at /models, e.g.:"
+    log "  -v \$(pwd)/models:/models:ro"
+    exit 1
+  fi
+  log "Model weights present: $(ls -1 /models/*.gguf | wc -l) GGUF file(s)"
+else
+  log "TENAOS_LLM_BACKEND=${TENAOS_LLM_BACKEND} -- skipping local GGUF mount check."
+  # The bind-mounted key at TENAOS_GCP_CREDENTIALS_PATH keeps its host
+  # permissions (typically 600, owned by the host user), which the
+  # in-container `tenaos` user can't read. Copy it into the already
+  # tenaos-owned runtime volume with correct ownership/mode instead of
+  # relaxing the source file's permissions.
+  if [ -n "${TENAOS_GCP_CREDENTIALS_PATH:-}" ] && [ -s "${TENAOS_GCP_CREDENTIALS_PATH}" ]; then
+    mkdir -p /opt/tenaos/runtime
+    cp "${TENAOS_GCP_CREDENTIALS_PATH}" /opt/tenaos/runtime/gcp-credentials.json
+    chown tenaos:tenaos /opt/tenaos/runtime/gcp-credentials.json
+    chmod 0600 /opt/tenaos/runtime/gcp-credentials.json
+    export TENAOS_GCP_CREDENTIALS_PATH=/opt/tenaos/runtime/gcp-credentials.json
+    log "Vertex credentials staged at ${TENAOS_GCP_CREDENTIALS_PATH} (owned by tenaos)."
+  else
+    log "WARNING: TENAOS_LLM_BACKEND=${TENAOS_LLM_BACKEND} but TENAOS_GCP_CREDENTIALS_PATH is unset/empty."
+  fi
 fi
-log "Model weights present: $(ls -1 /models/*.gguf | wc -l) GGUF file(s)"
 
 # ── Verify EmbedGemma is mounted ─────────────────────────────────────────
 if [ ! -f /opt/tenaos/embedgemma-300m/config.json ]; then

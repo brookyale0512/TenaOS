@@ -178,10 +178,7 @@ PY
 
 validate_artifacts() {
   local models_dir="$1" embed_dir="$2" ciel_file="$3" snapshots_dir="$4" sapbert_dir="$5"
-  # TEMPORARY: validating the plain base Gemma 4 E4B GGUF instead of the
-  # merged LoRA build (https://huggingface.co/beza4588/TenaOS) while the
-  # adapter is being retrained. Revert once the new adapter is republished.
-  [ -f "$models_dir/gemma-4-E4B-it-BF16.gguf" ] || die "missing Gemma GGUF at $models_dir/gemma-4-E4B-it-BF16.gguf"
+  [ -f "$models_dir/tenaos-gemma-4-E4B-it-lora-F16.gguf" ] || die "missing merged LoRA GGUF at $models_dir/tenaos-gemma-4-E4B-it-lora-F16.gguf"
   [ -f "$models_dir/mmproj-gemma-4-E4B-it-bf16.gguf" ] || die "missing mmproj GGUF at $models_dir/mmproj-gemma-4-E4B-it-bf16.gguf"
   [ -f "$embed_dir/config.json" ] || die "missing EmbedGemma config at $embed_dir/config.json"
   [ -f "$ciel_file" ] || die "missing CIEL SQLite at $ciel_file"

@@ -2,19 +2,16 @@
 # TenaOS — first-run artifact bootstrap.
 #
 # Downloads every host-side artifact the TenaOS image bind-mounts:
-#   * Gemma 4 E4B BF16 GGUF + mmproj   (~16 GB)
+#   * Gemma 4 E4B + task-tagged LoRA, merged, F16 GGUF + mmproj  (~16 GB)
 #   * EmbedGemma 300M                  (~1.2 GB)
 #   * CIEL search SQLite               (~1.7 GB)
 #   * WHO/MSF + CIEL Qdrant snapshots  (~0.8 GB)
 #   * SapBERT (CIEL semantic encoder)  (~0.4 GB)
 #
-# TEMPORARY: TenaOS normally serves the merged LoRA model
-# (tenaos-gemma-4-E4B-it-lora-F16.gguf) by default so every deployment gets
-# the task-tagged adapter behavior described in the README and on the model
-# card (https://huggingface.co/beza4588/TenaOS). The published adapter is
-# currently being retrained to fix a data/production parity gap, so this
-# script downloads the plain base Gemma 4 E4B GGUF instead until the new
-# adapter is validated and republished.
+# TenaOS always serves the merged LoRA model (tenaos-gemma-4-E4B-it-lora-F16.gguf),
+# never the plain base Gemma 4 E4B, so that every deployment gets the
+# task-tagged adapter behavior described in the README and on the model
+# card (https://huggingface.co/beza4588/TenaOS).
 #
 # Idempotent: any artifact that is already present on disk is skipped.
 #
@@ -92,13 +89,14 @@ hf_download_dir() {
   hf download "$repo" --local-dir "$dest_dir" --repo-type "$repo_type" >/dev/null
 }
 
-# ── 1. Gemma 4 E4B BF16 GGUF + mmproj projector ──────────────────────────
-# TEMPORARY: downloading the plain base model
-# (gemma-4-E4B-it-BF16.gguf) instead of the merged LoRA build while the
-# adapter is being retrained. Revert to tenaos-gemma-4-E4B-it-lora-F16.gguf
-# once the new adapter is validated and republished.
-log "[1/5] Gemma 4 E4B BF16 GGUF (~15 GB) from hf.co/$GEMMA_REPO"
-for f in gemma-4-E4B-it-BF16.gguf mmproj-gemma-4-E4B-it-bf16.gguf; do
+# ── 1. Gemma 4 E4B + LoRA merged F16 GGUF + mmproj projector ─────────────
+# tenaos-gemma-4-E4B-it-lora-F16.gguf is the merged (base + task-tagged
+# LoRA adapter) generation model — this is what TenaOS actually serves.
+# The mmproj projector is unaffected by the LoRA merge (only attention/MLP
+# projections were adapted), so it stays the base file; this matches the
+# model card's own "Merged LoRA model" llama-server example exactly.
+log "[1/5] Gemma 4 E4B + LoRA merged F16 GGUF (~16 GB) from hf.co/$GEMMA_REPO"
+for f in tenaos-gemma-4-E4B-it-lora-F16.gguf mmproj-gemma-4-E4B-it-bf16.gguf; do
   if have_file "$MODELS_DIR/$f" 1000000; then
     log "      $f already present, skipping"
   else
